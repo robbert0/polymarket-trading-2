@@ -1,0 +1,16 @@
+{
+  "name": "bull-board",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/bull-board/src",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "serve": {
+      "continuous": true,
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npx tsx apps/bull-board/src/main.ts"
+      }
+    }
+  }
+}

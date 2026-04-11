@@ -1,0 +1,108 @@
+<div class="flex flex-col h-full">
+  <div class="shrink-0 px-6 pt-4 pb-2">
+    <div class="flex gap-6 text-sm text-gray-400 mb-3">
+      <div>
+        Status:
+        <span [class]="connected ? 'text-green-400' : 'text-red-400'">
+          {{ connected ? 'connected' : 'disconnected' }}
+        </span>
+      </div>
+      <div>Updates: <span class="text-cyan-400">{{ updateCount }}</span></div>
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-auto px-6">
+    <h2 class="text-lg font-semibold text-white mb-4">Perpetuals</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+      @for (ticker of sortedTickers; track ticker.instrument_name) {
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-lg font-bold text-white">{{ ticker.instrument_name }}</span>
+            <span class="text-xs text-gray-600">{{ formatTime(ticker.timestamp) }}</span>
+          </div>
+
+          <div class="text-2xl font-bold text-white mb-2">
+            ${{ formatPrice(ticker.mark_price) }}
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 text-sm mb-3">
+            <div>
+              <div class="text-gray-600">Index</div>
+              <div class="text-gray-300">${{ formatPrice(ticker.index_price) }}</div>
+            </div>
+            <div>
+              <div class="text-gray-600">Last</div>
+              <div class="text-gray-300">${{ formatPrice(ticker.last_price) }}</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 text-xs">
+            <div>
+              <div class="text-gray-600">Funding</div>
+              <div [class]="ticker.current_funding >= 0 ? 'text-green-400' : 'text-red-400'">
+                {{ formatFunding(ticker.current_funding) }}
+              </div>
+            </div>
+            <div>
+              <div class="text-gray-600">OI</div>
+              <div class="text-gray-300">{{ (ticker.open_interest / 1e6).toFixed(2) }}M</div>
+            </div>
+            <div>
+              <div class="text-gray-600">24h Change</div>
+              <div [class]="ticker.price_change_24h >= 0 ? 'text-green-400' : 'text-red-400'">
+                {{ ticker.price_change_24h >= 0 ? '+' : '' }}{{ ticker.price_change_24h.toFixed(2) }}%
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 text-xs mt-3 pt-3 border-t border-gray-800">
+            <div>
+              <div class="text-gray-600">Best Bid</div>
+              <div class="text-green-400">${{ formatPrice(ticker.best_bid_price) }} ({{ ticker.best_bid_amount }})</div>
+            </div>
+            <div>
+              <div class="text-gray-600">Best Ask</div>
+              <div class="text-red-400">${{ formatPrice(ticker.best_ask_price) }} ({{ ticker.best_ask_amount }})</div>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+
+    @if (options.length > 0) {
+      <h2 class="text-lg font-semibold text-white mb-4">Options</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead class="text-xs text-gray-500 border-b border-gray-800">
+            <tr>
+              <th class="py-2 pr-4">Instrument</th>
+              <th class="py-2 pr-4">Mark IV</th>
+              <th class="py-2 pr-4">Delta</th>
+              <th class="py-2 pr-4">Gamma</th>
+              <th class="py-2 pr-4">Vega</th>
+              <th class="py-2 pr-4">Theta</th>
+              <th class="py-2 pr-4">OI</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (opt of options; track opt.instrument_name) {
+              <tr class="border-b border-gray-900 text-gray-300">
+                <td class="py-2 pr-4 font-mono text-white">{{ opt.instrument_name }}</td>
+                <td class="py-2 pr-4">{{ opt.mark_iv.toFixed(1) }}%</td>
+                <td class="py-2 pr-4">{{ opt.delta.toFixed(4) }}</td>
+                <td class="py-2 pr-4">{{ opt.gamma.toFixed(6) }}</td>
+                <td class="py-2 pr-4">{{ opt.vega.toFixed(4) }}</td>
+                <td class="py-2 pr-4">{{ opt.theta.toFixed(4) }}</td>
+                <td class="py-2 pr-4">{{ opt.open_interest.toFixed(1) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @if (sortedTickers.length === 0 && connected) {
+      <div class="text-center text-gray-600 mt-12">Waiting for Deribit data...</div>
+    }
+  </div>
+</div>

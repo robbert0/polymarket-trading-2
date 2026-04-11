@@ -10,6 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Server, Socket } from 'socket.io';
+import { EVENTS } from '@polymarket-ws/shared-types';
 import { RtdsService } from '../rtds/rtds.service';
 import { ClobWsService } from '../clob-ws/clob-ws.service';
 import { BookMessage, PriceChangeMessage, LastTradePriceMessage } from '../clob-ws/clob-ws.types';
@@ -150,5 +151,61 @@ export class PolymarketGateway
     this.server
       .to(`market:${payload.asset_id}`)
       .emit('last_trade_price', payload);
+  }
+
+  // --- Event handlers: Deribit events → Socket.io rooms ---
+
+  @OnEvent(EVENTS.DERIBIT.TICKER)
+  onDeribitTicker(payload: unknown): void {
+    this.server.to('deribit').emit('deribit_ticker', payload);
+  }
+
+  @OnEvent(EVENTS.DERIBIT.OPTIONS)
+  onDeribitOptions(payload: unknown): void {
+    this.server.to('deribit').emit('deribit_options', payload);
+  }
+
+  // --- Event handlers: Derived/combined events → Socket.io rooms ---
+
+  @OnEvent(EVENTS.DERIVED.PRICE_CORRELATION)
+  onPriceCorrelation(payload: unknown): void {
+    this.server.to('correlations').emit('price_correlation', payload);
+  }
+
+  @OnEvent(EVENTS.DERIVED.ENRICHED_TRADE)
+  onEnrichedTrade(payload: unknown): void {
+    this.server.to('trades').emit('enriched_trade', payload);
+  }
+
+  @OnEvent(EVENTS.DERIVED.MARKET_SNAPSHOT)
+  onMarketSnapshot(payload: unknown): void {
+    this.server.to('correlations').emit('market_snapshot', payload);
+  }
+
+  // --- Subscribe handlers for new rooms ---
+
+  @SubscribeMessage('subscribe:deribit')
+  handleSubscribeDeribit(@ConnectedSocket() client: Socket): void {
+    client.join('deribit');
+    this.logger.debug(`Client ${client.id} subscribed to deribit`);
+  }
+
+  @SubscribeMessage('subscribe:correlations')
+  handleSubscribeCorrelations(@ConnectedSocket() client: Socket): void {
+    client.join('correlations');
+    this.logger.debug(`Client ${client.id} subscribed to correlations`);
+  }
+
+  @SubscribeMessage('subscribe:edge')
+  handleSubscribeEdge(@ConnectedSocket() client: Socket): void {
+    client.join('edge');
+    this.logger.debug(`Client ${client.id} subscribed to edge`);
+  }
+
+  // --- Event handler: Edge events → Socket.io room ---
+
+  @OnEvent(EVENTS.DERIVED.EDGE)
+  onEdge(payload: unknown): void {
+    this.server.to('edge').emit('edge', payload);
   }
 }

@@ -4,7 +4,8 @@
   "license": "MIT",
   "scripts": {
     "start:api": "nx run api:serve --no-tui",
-    "start:dashboard": "nx run dashboard:serve"
+    "start:dashboard": "nx run dashboard:serve",
+    "start:bull-board": "nx run bull-board:serve"
   },
   "private": true,
   "dependencies": {
@@ -14,7 +15,10 @@
     "@angular/forms": "~21.2.0",
     "@angular/platform-browser": "~21.2.0",
     "@angular/router": "~21.2.0",
+    "@bull-board/api": "^6.21.0",
+    "@bull-board/express": "^6.21.0",
     "@nestjs/axios": "^4.0.1",
+    "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.0",
@@ -25,8 +29,10 @@
     "@nestjs/websockets": "^11.1.18",
     "@polymarket/real-time-data-client": "^1.4.0",
     "axios": "^1.15.0",
+    "bullmq": "^5.73.4",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "ioredis": "^5.10.1",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.0",
     "socket.io": "^4.8.3",
@@ -76,6 +82,7 @@
     "ts-jest": "^29.4.0",
     "ts-node": "10.9.1",
     "tslib": "^2.3.0",
+    "tsx": "^4.21.0",
     "typescript": "~5.9.2",
     "typescript-eslint": "^8.40.0",
     "vitest": "^4.0.8",

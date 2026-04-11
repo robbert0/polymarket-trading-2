@@ -21,4 +21,25 @@ export const appRoutes: Routes = [
         (m) => m.OrderbookComponent,
       ),
   },
+  {
+    path: 'deribit',
+    loadComponent: () =>
+      import('./pages/deribit/deribit.component').then(
+        (m) => m.DeribitComponent,
+      ),
+  },
+  {
+    path: 'correlations',
+    loadComponent: () =>
+      import('./pages/correlations/correlations.component').then(
+        (m) => m.CorrelationsComponent,
+      ),
+  },
+  {
+    path: 'edge',
+    loadComponent: () =>
+      import('./pages/edge/edge.component').then(
+        (m) => m.EdgeComponent,
+      ),
+  },
 ];

@@ -2,6 +2,7 @@ import { Controller, Logger, Param, Query, Req, Sse } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Request } from 'express';
 import { Observable } from 'rxjs';
+import { EVENTS } from '@polymarket-ws/shared-types';
 import { ClobWsService } from '../clob-ws/clob-ws.service';
 import { BookMessage, PriceChangeMessage, LastTradePriceMessage } from '../clob-ws/clob-ws.types';
 
@@ -105,6 +106,79 @@ export class SseController {
         this.eventEmitter.off('polymarket.price_change', priceHandler);
         this.eventEmitter.off('polymarket.last_trade_price', lastTradeHandler);
         this.clobWsService.unsubscribe([assetId]);
+      };
+    });
+  }
+
+  @Sse('deribit')
+  streamDeribit(@Req() req: Request): Observable<MessageEvent> {
+    return new Observable((subscriber) => {
+      const tickerHandler = (payload: unknown) => {
+        subscriber.next({ data: payload, type: 'deribit_ticker' } as MessageEvent);
+      };
+      const optionsHandler = (payload: unknown) => {
+        subscriber.next({ data: payload, type: 'deribit_options' } as MessageEvent);
+      };
+
+      this.eventEmitter.on(EVENTS.DERIBIT.TICKER, tickerHandler);
+      this.eventEmitter.on(EVENTS.DERIBIT.OPTIONS, optionsHandler);
+
+      req.on('close', () => subscriber.complete());
+      return () => {
+        this.eventEmitter.off(EVENTS.DERIBIT.TICKER, tickerHandler);
+        this.eventEmitter.off(EVENTS.DERIBIT.OPTIONS, optionsHandler);
+      };
+    });
+  }
+
+  @Sse('correlations')
+  streamCorrelations(@Req() req: Request): Observable<MessageEvent> {
+    return new Observable((subscriber) => {
+      const correlationHandler = (payload: unknown) => {
+        subscriber.next({ data: payload, type: 'price_correlation' } as MessageEvent);
+      };
+      const enrichedTradeHandler = (payload: unknown) => {
+        subscriber.next({ data: payload, type: 'enriched_trade' } as MessageEvent);
+      };
+      const snapshotHandler = (payload: unknown) => {
+        subscriber.next({ data: payload, type: 'market_snapshot' } as MessageEvent);
+      };
+
+      this.eventEmitter.on(EVENTS.DERIVED.PRICE_CORRELATION, correlationHandler);
+      this.eventEmitter.on(EVENTS.DERIVED.ENRICHED_TRADE, enrichedTradeHandler);
+      this.eventEmitter.on(EVENTS.DERIVED.MARKET_SNAPSHOT, snapshotHandler);
+
+      const keepalive = setInterval(() => {
+        subscriber.next({ data: '', type: 'keepalive' } as MessageEvent);
+      }, 15_000);
+
+      req.on('close', () => subscriber.complete());
+      return () => {
+        clearInterval(keepalive);
+        this.eventEmitter.off(EVENTS.DERIVED.PRICE_CORRELATION, correlationHandler);
+        this.eventEmitter.off(EVENTS.DERIVED.ENRICHED_TRADE, enrichedTradeHandler);
+        this.eventEmitter.off(EVENTS.DERIVED.MARKET_SNAPSHOT, snapshotHandler);
+      };
+    });
+  }
+
+  @Sse('edge')
+  streamEdge(@Req() req: Request): Observable<MessageEvent> {
+    return new Observable((subscriber) => {
+      const edgeHandler = (payload: unknown) => {
+        subscriber.next({ data: payload, type: 'edge' } as MessageEvent);
+      };
+
+      this.eventEmitter.on(EVENTS.DERIVED.EDGE, edgeHandler);
+
+      const keepalive = setInterval(() => {
+        subscriber.next({ data: '', type: 'keepalive' } as MessageEvent);
+      }, 15_000);
+
+      req.on('close', () => subscriber.complete());
+      return () => {
+        clearInterval(keepalive);
+        this.eventEmitter.off(EVENTS.DERIVED.EDGE, edgeHandler);
       };
     });
   }

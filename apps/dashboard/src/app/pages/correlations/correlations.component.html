@@ -1,0 +1,95 @@
+<div class="flex flex-col h-full">
+  <div class="shrink-0 px-6 pt-4 pb-2">
+    <div class="flex gap-6 text-sm text-gray-400 mb-3">
+      <div>
+        Status:
+        <span [class]="connected ? 'text-green-400' : 'text-red-400'">
+          {{ connected ? 'connected' : 'disconnected' }}
+        </span>
+      </div>
+      <div>Updates: <span class="text-cyan-400">{{ updateCount }}</span></div>
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-auto px-6">
+    <h2 class="text-lg font-semibold text-white mb-4">Price Correlations</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+      @for (corr of sortedCorrelations; track corr.symbol) {
+        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-lg font-bold text-white">{{ corr.symbol }}</span>
+            <span class="text-xs text-gray-600">{{ formatTime(corr.timestamp) }}</span>
+          </div>
+
+          <div class="grid grid-cols-3 gap-3 text-sm mb-3">
+            <div>
+              <div class="text-gray-600">Binance</div>
+              <div class="text-gray-300">${{ formatPrice(corr.binancePrice) }}</div>
+            </div>
+            <div>
+              <div class="text-gray-600">Deribit</div>
+              <div class="text-gray-300">${{ formatPrice(corr.deribitPrice) }}</div>
+            </div>
+            <div>
+              <div class="text-gray-600">Polymarket</div>
+              <div class="text-gray-300">${{ formatPrice(corr.polymarketPrice) }}</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 text-xs pt-3 border-t border-gray-800">
+            <div>
+              <div class="text-gray-600">Basis Spread</div>
+              <div [class]="(corr.basisSpread ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'">
+                {{ formatPercent(corr.basisSpread) }}
+              </div>
+            </div>
+            <div>
+              <div class="text-gray-600">Max Divergence</div>
+              <div class="text-yellow-400">{{ formatPercent(corr.maxDivergencePercent) }}</div>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+
+    @if (sortedCorrelations.length === 0 && connected) {
+      <div class="text-center text-gray-600 mb-8">Waiting for correlation data (needs multiple price sources)...</div>
+    }
+
+    <h2 class="text-lg font-semibold text-white mb-4">Enriched Trades</h2>
+    @if (enrichedTrades.length > 0) {
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead class="text-xs text-gray-500 border-b border-gray-800">
+            <tr>
+              <th class="py-2 pr-4">Time</th>
+              <th class="py-2 pr-4">Market</th>
+              <th class="py-2 pr-4">Side</th>
+              <th class="py-2 pr-4">Price</th>
+              <th class="py-2 pr-4">Size</th>
+              <th class="py-2 pr-4">BTC at Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (trade of enrichedTrades; track trade.id) {
+              <tr class="border-b border-gray-900">
+                <td class="py-2 pr-4 text-gray-500 text-xs">{{ formatTime(trade.timestamp) }}</td>
+                <td class="py-2 pr-4 text-gray-300">{{ trade.market_slug }}</td>
+                <td class="py-2 pr-4" [class]="trade.side === 'BUY' ? 'text-green-400' : 'text-red-400'">
+                  {{ trade.side }}
+                </td>
+                <td class="py-2 pr-4 text-white">{{ trade.price }}</td>
+                <td class="py-2 pr-4 text-gray-300">{{ trade.size }}</td>
+                <td class="py-2 pr-4 text-yellow-400">
+                  {{ trade.btcPriceAtTime ? '$' + formatPrice(trade.btcPriceAtTime) : '-' }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else if (connected) {
+      <div class="text-center text-gray-600">Waiting for enriched trade data...</div>
+    }
+  </div>
+</div>

@@ -1,0 +1,98 @@
+<div class="flex flex-col h-full">
+  <div class="shrink-0 px-6 pt-4 pb-2">
+    <div class="flex gap-6 text-sm text-gray-400 mb-3">
+      <div>
+        Status:
+        <span [class]="connected ? 'text-green-400' : 'text-red-400'">
+          {{ connected ? 'connected' : 'disconnected' }}
+        </span>
+      </div>
+      <div>Updates: <span class="text-cyan-400">{{ updateCount }}</span></div>
+      <div>Markets: <span class="text-cyan-400">{{ edges.size }}</span></div>
+      @if (lastScan) {
+        <div>Last scan: <span class="text-cyan-400">{{ formatTime(lastScan) }}</span></div>
+      }
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-auto px-6">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left table-fixed">
+        <colgroup>
+          <col class="w-[280px]" />
+          <col class="w-[90px]" />
+          <col class="w-[100px]" />
+          <col class="w-[100px]" />
+          <col class="w-[100px]" />
+          <col class="w-[80px]" />
+          <col class="w-[90px]" />
+          <col class="w-[100px]" />
+          <col class="w-[120px]" />
+        </colgroup>
+        <thead class="text-xs text-gray-500 border-b border-gray-800">
+          <tr>
+            <th class="py-3 pr-4">Market</th>
+            <th class="py-3 pr-4 text-right">Strike</th>
+            <th class="py-3 pr-4">Expiry</th>
+            <th class="py-3 pr-4 text-right">Deribit Prob</th>
+            <th class="py-3 pr-4 text-right">Polymarket</th>
+            <th class="py-3 pr-4 text-right">Edge</th>
+            <th class="py-3 pr-4">Advice</th>
+            <th class="py-3 pr-4 text-right">BTC Price</th>
+            <th class="py-3 pr-4 text-right">Deribit Mark IV</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (edge of sortedEdges; track edge.marketId) {
+            <tr
+              class="border-b border-gray-900 transition-colors"
+              [class.bg-green-950]="edge.advice === 'BUY_YES'"
+              [class.bg-red-950]="edge.advice === 'BUY_NO'"
+            >
+              <td class="py-3 pr-4 text-white font-medium truncate">
+                {{ edge.label }}
+              </td>
+              <td class="py-3 pr-4 text-right text-gray-300 font-mono">
+                {{ formatPrice(edge.strike) }}
+              </td>
+              <td class="py-3 pr-4 text-gray-400">
+                {{ edge.expiry }}
+              </td>
+              <td class="py-3 pr-4 text-right text-cyan-400 font-mono">
+                {{ formatPercent(edge.deribitProbability) }}
+              </td>
+              <td class="py-3 pr-4 text-right text-purple-400 font-mono">
+                {{ formatPercent(edge.polymarketProbability) }}
+              </td>
+              <td class="py-3 pr-4 text-right font-mono font-bold"
+                  [class]="edge.edge > 0.05 ? 'text-yellow-400' : 'text-gray-400'">
+                {{ formatPercent(edge.edge) }}
+              </td>
+              <td class="py-3 pr-4 font-semibold" [class]="adviceClass(edge.advice)">
+                {{ edge.advice === 'NO_TRADE' ? '-' : edge.advice }}
+              </td>
+              <td class="py-3 pr-4 text-right text-gray-300 font-mono">
+                {{ formatPrice(edge.underlyingPrice) }}
+              </td>
+              <td class="py-3 pr-4 text-right text-gray-400 font-mono">
+                {{ edge.impliedVolatility.toFixed(1) }}%
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (sortedEdges.length === 0 && connected) {
+      <div class="text-center text-gray-600 mt-12">
+        Waiting for edge data... (scans every 60s)
+      </div>
+    }
+
+    @if (!connected) {
+      <div class="text-center text-red-500 mt-12">
+        Disconnected — reconnecting...
+      </div>
+    }
+  </div>
+</div>
