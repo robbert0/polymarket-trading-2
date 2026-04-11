@@ -13,5 +13,5 @@ export type {
   PriceCorrelation,
   MarketSnapshot,
 } from './lib/types/correlation';
-export type { EdgeComparison, ParsedBet } from './lib/types/edge';
+export type { EdgeComparison, ParsedBet, OrderbookDepth } from './lib/types/edge';
 export { ARBITRAGE_EDGE_THRESHOLD } from './lib/types/edge';

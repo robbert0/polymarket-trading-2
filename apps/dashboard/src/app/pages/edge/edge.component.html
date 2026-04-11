@@ -19,15 +19,19 @@
     <div class="overflow-x-auto">
       <table class="w-full text-sm text-left table-fixed">
         <colgroup>
-          <col class="w-[280px]" />
-          <col class="w-[90px]" />
-          <col class="w-[100px]" />
-          <col class="w-[100px]" />
-          <col class="w-[100px]" />
+          <col class="w-[240px]" />
           <col class="w-[80px]" />
           <col class="w-[90px]" />
+          <col class="w-[90px]" />
+          <col class="w-[90px]" />
+          <col class="w-[70px]" />
+          <col class="w-[80px]" />
+          <col class="w-[70px]" />
+          <col class="w-[80px]" />
+          <col class="w-[60px]" />
+          <col class="w-[90px]" />
           <col class="w-[100px]" />
-          <col class="w-[120px]" />
+          <col class="w-[80px]" />
         </colgroup>
         <thead class="text-xs text-gray-500 border-b border-gray-800">
           <tr>
@@ -37,6 +41,10 @@
             <th class="py-3 pr-4 text-right">Deribit Prob</th>
             <th class="py-3 pr-4 text-right">Polymarket</th>
             <th class="py-3 pr-4 text-right">Edge</th>
+            <th class="py-3 pr-4 text-right">Exec Edge</th>
+            <th class="py-3 pr-4 text-right">Spread</th>
+            <th class="py-3 pr-4 text-right">Fillable</th>
+            <th class="py-3 pr-4 text-right">Fill</th>
             <th class="py-3 pr-4">Advice</th>
             <th class="py-3 pr-4 text-right">BTC Price</th>
             <th class="py-3 pr-4 text-right">Deribit Mark IV</th>
@@ -67,6 +75,20 @@
               <td class="py-3 pr-4 text-right font-mono font-bold"
                   [class]="edge.edge > 0.05 ? 'text-yellow-400' : 'text-gray-400'">
                 {{ formatPercent(edge.edge) }}
+              </td>
+              <td class="py-3 pr-4 text-right font-mono font-bold"
+                  [class]="execEdgeClass(edge)">
+                {{ formatExecEdge(edge) }}
+              </td>
+              <td class="py-3 pr-4 text-right font-mono text-gray-400">
+                {{ formatSpread(edge) }}
+              </td>
+              <td class="py-3 pr-4 text-right font-mono text-gray-300">
+                {{ formatFillable(edge) }}
+              </td>
+              <td class="py-3 pr-4 text-right font-mono font-bold"
+                  [class]="fillScoreClass(edge)">
+                {{ edge.orderbook?.fillScore ?? '-' }}
               </td>
               <td class="py-3 pr-4 font-semibold" [class]="adviceClass(edge.advice)">
                 {{ edge.advice === 'NO_TRADE' ? '-' : edge.advice }}

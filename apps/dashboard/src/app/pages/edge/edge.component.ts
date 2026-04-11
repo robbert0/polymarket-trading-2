@@ -74,4 +74,38 @@ export class EdgeComponent implements OnInit, OnDestroy {
     if (advice === 'BUY_NO') return 'text-red-400';
     return 'text-gray-500';
   }
+
+  formatSpread(edge: EdgeComparison): string {
+    if (edge.orderbook?.spread == null) return '-';
+    return (edge.orderbook.spread * 100).toFixed(1) + 'c';
+  }
+
+  formatExecEdge(edge: EdgeComparison): string {
+    if (edge.orderbook?.executableEdge == null) return '-';
+    const val = edge.orderbook.executableEdge;
+    return (val > 0 ? '+' : '') + (val * 100).toFixed(1) + '%';
+  }
+
+  formatFillable(edge: EdgeComparison): string {
+    if (!edge.orderbook?.fillableAmount) return '-';
+    const amt = edge.orderbook.fillableAmount;
+    if (amt >= 1000) return '$' + (amt / 1000).toFixed(1) + 'k';
+    return '$' + amt.toFixed(0);
+  }
+
+  fillScoreClass(edge: EdgeComparison): string {
+    const score = edge.orderbook?.fillScore ?? 0;
+    if (score >= 70) return 'text-green-400';
+    if (score >= 40) return 'text-yellow-400';
+    if (score > 0) return 'text-orange-400';
+    return 'text-gray-600';
+  }
+
+  execEdgeClass(edge: EdgeComparison): string {
+    const val = edge.orderbook?.executableEdge;
+    if (val == null) return 'text-gray-600';
+    if (val > 0.05) return 'text-green-400';
+    if (val > 0) return 'text-yellow-400';
+    return 'text-red-400';
+  }
 }

@@ -9,12 +9,15 @@ import {
 } from '@polymarket-ws/shared-types';
 import type {
   EdgeComparison,
+  OrderbookDepth,
   DeribitTicker,
   DeribitOption,
   PriceChangeMessage,
+  BookMessage,
 } from '@polymarket-ws/shared-types';
 import { DeribitWsService } from '../deribit/deribit-ws.service';
 import { ClobWsService } from '../polymarket/clob-ws/clob-ws.service';
+import { ClobRestService } from '../polymarket/clob-rest/clob-rest.service';
 import { parseBet } from './parse-bet';
 
 interface CachedMarket {
@@ -30,6 +33,9 @@ interface CachedMarket {
   slug?: string;
   volume?: number;
   liquidity?: number;
+  bids: [number, number][];
+  asks: [number, number][];
+  bookTimestamp: number;
 }
 
 interface PolymarketApiMarket {
@@ -57,6 +63,7 @@ interface PolymarketEvent {
 export class EdgeService implements OnModuleInit {
   private readonly logger = new Logger(EdgeService.name);
   private readonly GAMMA_API = 'https://gamma-api.polymarket.com';
+  private readonly BOOK_THROTTLE_MS = 500;
 
   /** marketId → cached market data */
   private marketCache = new Map<string, CachedMarket>();
@@ -64,12 +71,15 @@ export class EdgeService implements OnModuleInit {
   private instrumentToMarket = new Map<string, string>();
   /** Polymarket YES token ID → marketId (for fast lookup on price_change) */
   private tokenToMarket = new Map<string, string>();
+  /** Trailing-edge throttle timers for book updates */
+  private bookRecalcTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(
     private readonly httpService: HttpService,
     private readonly eventEmitter: EventEmitter2,
     private readonly deribitWsService: DeribitWsService,
     private readonly clobWsService: ClobWsService,
+    private readonly clobRestService: ClobRestService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -134,6 +144,9 @@ export class EdgeService implements OnModuleInit {
         slug: market.slug,
         volume: parseFloat(market.volume) || 0,
         liquidity: parseFloat(market.liquidity) || 0,
+        bids: existing?.bids ?? [],
+        asks: existing?.asks ?? [],
+        bookTimestamp: existing?.bookTimestamp ?? 0,
       });
 
       this.instrumentToMarket.set(instrumentName, market.id);
@@ -161,6 +174,48 @@ export class EdgeService implements OnModuleInit {
 
     this.logger.log(
       `Edge market cache refreshed: ${this.marketCache.size} markets`,
+    );
+
+    // Fetch orderbooks via REST to seed the cache
+    await this.fetchOrderbooks();
+  }
+
+  private async fetchOrderbooks(): Promise<void> {
+    const entries = [...this.marketCache.values()];
+    const results = await Promise.allSettled(
+      entries.map(async (market) => {
+        const book = (await this.clobRestService.getOrderBook(
+          market.yesTokenId,
+        )) as {
+          bids?: { price: string; size: string }[];
+          asks?: { price: string; size: string }[];
+        };
+
+        if (book.bids) {
+          market.bids = book.bids
+            .map(
+              (b) =>
+                [parseFloat(b.price), parseFloat(b.size)] as [number, number],
+            )
+            .filter(([p, s]) => p > 0 && s > 0)
+            .sort((a, b) => b[0] - a[0]);
+        }
+        if (book.asks) {
+          market.asks = book.asks
+            .map(
+              (a) =>
+                [parseFloat(a.price), parseFloat(a.size)] as [number, number],
+            )
+            .filter(([p, s]) => p > 0 && s > 0)
+            .sort((a, b) => a[0] - b[0]);
+        }
+        market.bookTimestamp = Date.now();
+      }),
+    );
+
+    const fetched = results.filter((r) => r.status === 'fulfilled').length;
+    this.logger.log(
+      `Fetched orderbooks: ${fetched}/${entries.length} successful`,
     );
   }
 
@@ -223,6 +278,45 @@ export class EdgeService implements OnModuleInit {
     this.recalculateAndEmit(market);
   }
 
+  /**
+   * Polymarket CLOB book update — update orderbook for the matching market.
+   */
+  @OnEvent(EVENTS.POLYMARKET.BOOK_UPDATE)
+  onBookUpdate(payload: BookMessage): void {
+    const marketId = this.tokenToMarket.get(payload.asset_id);
+    if (!marketId) return;
+
+    const market = this.marketCache.get(marketId);
+    if (!market) return;
+
+    market.bids = payload.bids
+      .map(([p, s]) => [parseFloat(p), parseFloat(s)] as [number, number])
+      .filter(([p, s]) => p > 0 && s > 0)
+      .sort((a, b) => b[0] - a[0]);
+
+    market.asks = payload.asks
+      .map(([p, s]) => [parseFloat(p), parseFloat(s)] as [number, number])
+      .filter(([p, s]) => p > 0 && s > 0)
+      .sort((a, b) => a[0] - b[0]);
+
+    market.bookTimestamp = payload.timestamp;
+
+    this.scheduleBookRecalc(marketId);
+  }
+
+  private scheduleBookRecalc(marketId: string): void {
+    if (this.bookRecalcTimers.has(marketId)) return;
+
+    this.bookRecalcTimers.set(
+      marketId,
+      setTimeout(() => {
+        this.bookRecalcTimers.delete(marketId);
+        const market = this.marketCache.get(marketId);
+        if (market) this.recalculateAndEmit(market);
+      }, this.BOOK_THROTTLE_MS),
+    );
+  }
+
   private recalculateAllAndEmit(): void {
     for (const market of this.marketCache.values()) {
       this.recalculateAndEmit(market);
@@ -239,15 +333,13 @@ export class EdgeService implements OnModuleInit {
     const deribitProbability = this.normalCDF(d2);
 
     const diff = deribitProbability - market.yesPrice;
+    const edge = Math.abs(diff);
     let advice: 'BUY_YES' | 'BUY_NO' | 'NO_TRADE' = 'NO_TRADE';
-    let edge = 0;
 
     if (diff > ARBITRAGE_EDGE_THRESHOLD) {
       advice = 'BUY_YES';
-      edge = diff;
     } else if (diff < -ARBITRAGE_EDGE_THRESHOLD) {
       advice = 'BUY_NO';
-      edge = Math.abs(diff);
     }
 
     if (edge > 0.5) {
@@ -257,6 +349,12 @@ export class EdgeService implements OnModuleInit {
           `spot=${market.spotPrice} strike=${market.strike} iv=${(market.iv * 100).toFixed(1)}% T=${T.toFixed(4)}`,
       );
     }
+
+    const orderbook = this.computeOrderbookDepth(
+      market,
+      deribitProbability,
+      advice,
+    );
 
     const comparison: EdgeComparison = {
       marketId: market.marketId,
@@ -275,9 +373,104 @@ export class EdgeService implements OnModuleInit {
       volume: market.volume,
       liquidity: market.liquidity,
       timestamp: Date.now(),
+      orderbook,
     };
 
     this.eventEmitter.emit(EVENTS.DERIVED.EDGE, comparison);
+  }
+
+  private computeOrderbookDepth(
+    market: CachedMarket,
+    deribitProbability: number,
+    advice: 'BUY_YES' | 'BUY_NO' | 'NO_TRADE',
+  ): OrderbookDepth | undefined {
+    if (market.bids.length === 0 && market.asks.length === 0) return undefined;
+
+    const bestBid = market.bids[0]?.[0];
+    const bestBidSize = market.bids[0]?.[1];
+    const bestAsk = market.asks[0]?.[0];
+    const bestAskSize = market.asks[0]?.[1];
+    const spread =
+      bestAsk !== undefined && bestBid !== undefined
+        ? bestAsk - bestBid
+        : undefined;
+
+    let executableEdge: number | undefined;
+    let fillableAmount = 0;
+    let weightedPriceSum = 0;
+    let effectivePrice: number | undefined;
+
+    if (advice === 'BUY_YES' && bestAsk !== undefined) {
+      executableEdge = deribitProbability - bestAsk;
+      for (const [price, size] of market.asks) {
+        if (price >= deribitProbability) break;
+        fillableAmount += size;
+        weightedPriceSum += price * size;
+      }
+      if (fillableAmount > 0) {
+        effectivePrice = weightedPriceSum / fillableAmount;
+      }
+    } else if (advice === 'BUY_NO' && bestBid !== undefined) {
+      executableEdge = bestBid - deribitProbability;
+      for (const [price, size] of market.bids) {
+        if (price <= deribitProbability) break;
+        fillableAmount += size;
+        weightedPriceSum += price * size;
+      }
+      if (fillableAmount > 0) {
+        effectivePrice = weightedPriceSum / fillableAmount;
+      }
+    }
+
+    const fillScore = this.computeFillScore(
+      spread,
+      fillableAmount,
+      bestAskSize,
+      bestBidSize,
+      advice,
+    );
+
+    return {
+      bestAsk,
+      bestAskSize,
+      bestBid,
+      bestBidSize,
+      spread,
+      fillableAmount: fillableAmount > 0 ? fillableAmount : undefined,
+      effectivePrice,
+      executableEdge,
+      fillScore,
+    };
+  }
+
+  private computeFillScore(
+    spread: number | undefined,
+    fillableAmount: number,
+    bestAskSize: number | undefined,
+    bestBidSize: number | undefined,
+    advice: 'BUY_YES' | 'BUY_NO' | 'NO_TRADE',
+  ): number {
+    if (advice === 'NO_TRADE') return 0;
+    if (fillableAmount <= 0) return 0;
+
+    let score = 30; // liquidity exists
+
+    // Depth (0-30 points, capped at $5000)
+    score += Math.min(30, (fillableAmount / 5000) * 30);
+
+    // Spread tightness (0-20 points)
+    if (spread !== undefined && spread > 0) {
+      score += Math.max(0, 1 - (spread - 0.01) / 0.09) * 20;
+    }
+
+    // Best level size (0-20 points, capped at $1000)
+    const relevantBestSize =
+      advice === 'BUY_YES' ? bestAskSize : bestBidSize;
+    if (relevantBestSize) {
+      score += Math.min(20, (relevantBestSize / 1000) * 20);
+    }
+
+    return Math.round(Math.min(100, score));
   }
 
   private async fetchBitcoinMarkets(): Promise<PolymarketApiMarket[]> {

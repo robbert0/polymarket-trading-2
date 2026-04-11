@@ -1,6 +1,18 @@
 import { Injectable, NgZone } from '@angular/core';
 import { Observable } from 'rxjs';
 
+export interface OrderbookDepth {
+  bestAsk?: number;
+  bestAskSize?: number;
+  bestBid?: number;
+  bestBidSize?: number;
+  spread?: number;
+  fillableAmount?: number;
+  effectivePrice?: number;
+  executableEdge?: number;
+  fillScore?: number;
+}
+
 export interface EdgeComparison {
   marketId: string;
   label: string;
@@ -19,6 +31,7 @@ export interface EdgeComparison {
   volume?: number;
   liquidity?: number;
   timestamp: number;
+  orderbook?: OrderbookDepth;
 }
 
 @Injectable({ providedIn: 'root' })
