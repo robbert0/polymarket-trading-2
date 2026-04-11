@@ -1,0 +1,120 @@
+<div class="flex flex-col h-full">
+  <!-- Input -->
+  <div class="shrink-0 px-6 pt-4 pb-2">
+    <div class="flex gap-6 text-sm text-gray-400 mb-3">
+      <div>
+        Status:
+        <span [class]="connected ? 'text-green-400' : 'text-red-400'">
+          {{ connected ? 'connected' : 'disconnected' }}
+        </span>
+      </div>
+      @if (market) {
+        <div>Outcomes: <span class="text-cyan-400">{{ outcomes.length }}</span></div>
+      }
+    </div>
+    <div class="flex gap-2 items-center">
+      <input
+        type="text"
+        [(ngModel)]="slugInput"
+        (keyup.enter)="submit()"
+        placeholder="Enter market slug..."
+        class="bg-gray-900 border border-gray-700 text-gray-200 px-3 py-1.5 rounded text-sm flex-1 focus:outline-none focus:border-gray-500"
+      />
+      <button
+        (click)="submit()"
+        class="bg-gray-800 border border-gray-600 text-gray-200 px-4 py-1.5 rounded text-sm hover:bg-gray-700 cursor-pointer"
+      >
+        Load
+      </button>
+    </div>
+    @if (market) {
+      <p class="text-sm text-gray-300 mt-2">{{ market.question }}</p>
+    }
+  </div>
+
+  @if (loading) {
+    <div class="text-center text-gray-600 mt-12">Loading market...</div>
+  } @else if (error) {
+    <div class="text-center text-red-400 mt-12">{{ error }}</div>
+  } @else if (!market) {
+    <div class="text-center text-gray-600 mt-12">
+      Enter a market slug to view order books.<br />
+      <span class="text-gray-700 text-xs">Copy a slug from the Live Trades table.</span>
+    </div>
+  } @else {
+    <!-- Order books side by side -->
+    <div class="flex-1 overflow-auto px-6 pt-2">
+      <div class="grid gap-6" [style.grid-template-columns]="'repeat(' + outcomes.length + ', minmax(0, 1fr))'">
+        @for (outcome of outcomes; track outcome.assetId) {
+          <div class="border border-gray-800 rounded-lg overflow-hidden">
+            <!-- Outcome header -->
+            <div class="bg-gray-900 px-4 py-3 flex items-center justify-between">
+              <div>
+                <span class="text-white font-bold">{{ outcome.label }}</span>
+                @if (outcome.lastTradePrice > 0) {
+                  <span class="text-amber-400 ml-2 text-sm">{{ formatPrice(outcome.lastTradePrice) }}</span>
+                }
+              </div>
+              <span class="text-xs text-gray-600">{{ outcome.updateCount }} updates</span>
+            </div>
+
+            <!-- Column headers -->
+            <div class="flex text-xs text-gray-600 px-3 py-1 bg-gray-900/50">
+              <span class="w-1/4"></span>
+              <span class="w-1/4 text-right">Price</span>
+              <span class="w-1/4 text-right">Shares</span>
+              <span class="w-1/4 text-right">Total</span>
+            </div>
+
+            <!-- Asks -->
+            <div class="border-b border-gray-800">
+              @if (outcome.asks.length > 0) {
+                <div class="text-xs text-red-400/60 px-3 pt-1">Asks</div>
+              }
+              @for (level of outcome.asks.slice().reverse(); track level.price) {
+                <div class="flex items-center text-sm px-3 py-0.5 relative">
+                  <div
+                    class="absolute right-0 top-0 bottom-0 bg-red-950/30"
+                    [style.width.%]="level.percent"
+                  ></div>
+                  <span class="w-1/4 relative z-10"></span>
+                  <span class="w-1/4 text-right text-red-400 relative z-10">{{ formatPrice(level.price) }}</span>
+                  <span class="w-1/4 text-right text-gray-400 relative z-10">{{ formatSize(level.size) }}</span>
+                  <span class="w-1/4 text-right text-gray-600 relative z-10">{{ formatTotal(level.total) }}</span>
+                </div>
+              }
+            </div>
+
+            <!-- Spread -->
+            <div class="flex items-center justify-center px-3 py-1.5 text-xs text-gray-600 bg-gray-900/30">
+              @if (outcome.spread > 0) {
+                Spread: <span class="text-gray-400 ml-1">{{ formatPrice(outcome.spread) }}</span>
+              } @else {
+                <span>&nbsp;</span>
+              }
+            </div>
+
+            <!-- Bids -->
+            <div>
+              @if (outcome.bids.length > 0) {
+                <div class="text-xs text-green-400/60 px-3 pt-1">Bids</div>
+              }
+              @for (level of outcome.bids; track level.price) {
+                <div class="flex items-center text-sm px-3 py-0.5 relative">
+                  <div
+                    class="absolute left-0 top-0 bottom-0 bg-green-950/30"
+                    [style.width.%]="level.percent"
+                  ></div>
+                  <span class="w-1/4 relative z-10"></span>
+                  <span class="w-1/4 text-right text-green-400 relative z-10">{{ formatPrice(level.price) }}</span>
+                  <span class="w-1/4 text-right text-gray-400 relative z-10">{{ formatSize(level.size) }}</span>
+                  <span class="w-1/4 text-right text-gray-600 relative z-10">{{ formatTotal(level.total) }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

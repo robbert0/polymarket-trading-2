@@ -1,0 +1,32 @@
+<div class="h-screen bg-gray-950 text-gray-200 font-mono flex flex-col">
+  <!-- Nav -->
+  <nav class="shrink-0 px-6 pt-4 pb-2 flex items-center gap-6 border-b border-gray-800">
+    <h1 class="text-lg font-bold text-white mr-4">Polymarket</h1>
+    <a
+      routerLink="/trades"
+      routerLinkActive="text-white border-b-2 border-cyan-400"
+      class="text-sm text-gray-400 hover:text-gray-200 pb-2 -mb-[9px] transition-colors"
+    >
+      Live Trades
+    </a>
+    <a
+      routerLink="/crypto"
+      routerLinkActive="text-white border-b-2 border-cyan-400"
+      class="text-sm text-gray-400 hover:text-gray-200 pb-2 -mb-[9px] transition-colors"
+    >
+      Crypto Prices
+    </a>
+    <a
+      routerLink="/orderbook"
+      routerLinkActive="text-white border-b-2 border-cyan-400"
+      class="text-sm text-gray-400 hover:text-gray-200 pb-2 -mb-[9px] transition-colors"
+    >
+      Order Book
+    </a>
+  </nav>
+
+  <!-- Content -->
+  <div class="flex-1 overflow-hidden">
+    <router-outlet />
+  </div>
+</div>

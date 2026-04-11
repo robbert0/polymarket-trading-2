@@ -1,0 +1,100 @@
+<div class="flex flex-col h-full">
+  <div class="shrink-0 px-6 pt-4 pb-2">
+    <p class="text-sm text-gray-500 mb-3">
+      {{ activeFilter ? 'Filtering: ' + activeFilter : 'All markets' }}
+    </p>
+
+    <div class="flex gap-6 text-sm text-gray-400 mb-3">
+      <div>
+        Status:
+        <span [class]="connected ? 'text-green-400' : 'text-red-400'">
+          {{ connected ? 'connected' : 'disconnected' }}
+        </span>
+      </div>
+      <div>Trades: <span class="text-cyan-400">{{ tradeCount }}</span></div>
+      <div>Volume: <span class="text-cyan-400">${{ volume.toFixed(2) }}</span></div>
+    </div>
+
+    <div class="flex gap-2 items-center">
+      <input
+        type="text"
+        [(ngModel)]="marketFilter"
+        (keyup.enter)="applyFilter()"
+        placeholder="Filter by market slug..."
+        class="bg-gray-900 border border-gray-700 text-gray-200 px-3 py-1.5 rounded text-sm w-80 focus:outline-none focus:border-gray-500"
+      />
+      <button
+        (click)="applyFilter()"
+        class="bg-gray-800 border border-gray-600 text-gray-200 px-4 py-1.5 rounded text-sm hover:bg-gray-700 cursor-pointer"
+      >
+        Apply
+      </button>
+      <button
+        (click)="clearFilter()"
+        class="bg-gray-800 border border-gray-600 text-gray-200 px-4 py-1.5 rounded text-sm hover:bg-gray-700 cursor-pointer"
+      >
+        Clear
+      </button>
+      <button
+        (click)="togglePause()"
+        [class]="paused
+          ? 'bg-amber-900 border border-amber-600 text-amber-200 px-4 py-1.5 rounded text-sm hover:bg-amber-800 cursor-pointer'
+          : 'bg-gray-800 border border-gray-600 text-gray-200 px-4 py-1.5 rounded text-sm hover:bg-gray-700 cursor-pointer'"
+      >
+        {{ paused ? 'Resume (' + bufferedCount + ')' : 'Pause' }}
+      </button>
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-auto px-6">
+    <table class="w-full text-sm border-collapse table-fixed">
+      <thead class="sticky top-0 z-10">
+        <tr class="text-left text-gray-500 bg-gray-900">
+          <th class="px-3 py-2 font-medium w-32">Time</th>
+          <th class="px-3 py-2 font-medium">Market</th>
+          <th class="px-3 py-2 font-medium w-52">Slug</th>
+          <th class="px-3 py-2 font-medium w-40">Outcome</th>
+          <th class="px-3 py-2 font-medium w-16">Side</th>
+          <th class="px-3 py-2 font-medium w-20">Price</th>
+          <th class="px-3 py-2 font-medium w-24">Size</th>
+          <th class="px-3 py-2 font-medium w-40">User</th>
+          <th class="px-3 py-2 font-medium w-28">Asset</th>
+          <th class="px-3 py-2 font-medium w-28">Tx</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (trade of trades; track trade.transactionHash + $index) {
+          <tr class="border-b border-gray-900 hover:bg-gray-900/50 transition-colors">
+            <td class="px-3 py-1.5 text-gray-500">{{ formatTime(trade.timestamp) }}</td>
+            <td class="px-3 py-1.5 max-w-xs truncate" [title]="trade.title">{{ trade.title || trade.slug }}</td>
+            <td class="px-3 py-1.5 max-w-xs truncate" [title]="trade.slug">
+              <a [routerLink]="'/orderbook'" [queryParams]="{ slug: trade.slug }" class="text-gray-500 hover:text-cyan-400">{{ trade.slug }}</a>
+            </td>
+            <td class="px-3 py-1.5 text-purple-300 truncate">{{ trade.outcome }}</td>
+            <td class="px-3 py-1.5" [class]="trade.side === 'BUY' ? 'text-green-400' : 'text-red-400'">
+              {{ trade.side }}
+            </td>
+            <td class="px-3 py-1.5 text-amber-400 font-semibold">{{ trade.price.toFixed(3) }}</td>
+            <td class="px-3 py-1.5 text-cyan-400">{{ trade.size }}</td>
+            <td class="px-3 py-1.5 truncate">{{ trade.pseudonym || trade.name }}</td>
+            <td class="px-3 py-1.5 text-gray-600 truncate" [title]="trade.asset">{{ trade.asset }}</td>
+            <td class="px-3 py-1.5">
+              @if (trade.transactionHash) {
+                <a
+                  [href]="polygonscanUrl(trade.transactionHash)"
+                  target="_blank"
+                  class="text-gray-600 hover:text-gray-400"
+                >
+                  {{ shortTx(trade.transactionHash) }}
+                </a>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    @if (trades.length === 0 && connected) {
+      <div class="text-center text-gray-600 mt-12">Waiting for trades...</div>
+    }
+  </div>
+</div>

@@ -1,0 +1,61 @@
+<div class="flex flex-col h-full">
+  <div class="shrink-0 px-6 pt-4 pb-2">
+    <div class="flex gap-6 text-sm text-gray-400 mb-3">
+      <div>
+        Status:
+        <span [class]="connected ? 'text-green-400' : 'text-red-400'">
+          {{ connected ? 'connected' : 'disconnected' }}
+        </span>
+      </div>
+      <div>Updates: <span class="text-cyan-400">{{ updateCount }}</span></div>
+      <div>Symbols: <span class="text-cyan-400">{{ prices.size }}</span></div>
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-auto px-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      @for (row of sortedPrices; track row.symbol) {
+        <div
+          class="bg-gray-900 border border-gray-800 rounded-lg p-4 transition-colors"
+          [class.border-green-800]="row.flash === 'up'"
+          [class.border-red-800]="row.flash === 'down'"
+        >
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-lg font-bold text-white">{{ cleanSymbol(row.symbol) }}</span>
+            <span class="text-xs text-gray-600">{{ formatTime(row.lastUpdate) }}</span>
+          </div>
+
+          <div class="text-2xl font-bold mb-2" [class]="row.change >= 0 ? 'text-green-400' : 'text-red-400'">
+            ${{ formatPrice(row.price) }}
+          </div>
+
+          <div class="flex items-center gap-3 text-sm mb-3">
+            <span [class]="row.change >= 0 ? 'text-green-400' : 'text-red-400'">
+              {{ row.change >= 0 ? '+' : '' }}{{ row.change.toFixed(2) }}
+              ({{ row.changePercent >= 0 ? '+' : '' }}{{ row.changePercent.toFixed(2) }}%)
+            </span>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 text-xs text-gray-500">
+            <div>
+              <div class="text-gray-600">High</div>
+              <div class="text-gray-300">${{ formatPrice(row.high) }}</div>
+            </div>
+            <div>
+              <div class="text-gray-600">Low</div>
+              <div class="text-gray-300">${{ formatPrice(row.low) }}</div>
+            </div>
+            <div>
+              <div class="text-gray-600">Volume</div>
+              <div class="text-gray-300">${{ row.volume }}</div>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+
+    @if (sortedPrices.length === 0 && connected) {
+      <div class="text-center text-gray-600 mt-12">Waiting for price data...</div>
+    }
+  </div>
+</div>
