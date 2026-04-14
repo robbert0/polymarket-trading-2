@@ -58,7 +58,16 @@
               [class.bg-red-950]="edge.advice === 'BUY_NO'"
             >
               <td class="py-3 pr-4 text-white font-medium truncate">
-                {{ edge.label }}
+                @if (edge.slug) {
+                  <a
+                    [href]="'https://polymarket.com/market/' + edge.slug"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="hover:text-blue-400 hover:underline"
+                  >{{ edge.label }}</a>
+                } @else {
+                  {{ edge.label }}
+                }
               </td>
               <td class="py-3 pr-4 text-right text-gray-300 font-mono">
                 {{ formatPrice(edge.strike) }}
