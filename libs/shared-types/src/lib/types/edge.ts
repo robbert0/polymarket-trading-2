@@ -35,5 +35,3 @@ export interface ParsedBet {
   strike: number;
   expiry: string;
 }
-
-export const ARBITRAGE_EDGE_THRESHOLD = 0.08;

@@ -1,12 +1,16 @@
-import { Injectable, Logger, OnModuleInit, OnApplicationShutdown } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnApplicationShutdown,
+  OnModuleInit,
+} from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OnEvent } from '@nestjs/event-emitter';
 import { firstValueFrom } from 'rxjs';
-import {
-  ARBITRAGE_EDGE_THRESHOLD,
-  EVENTS,
-} from '@polymarket-ws/shared-types';
+import { EVENTS } from '@polymarket-ws/shared-types';
 import type {
   EdgeComparison,
   OrderbookDepth,
@@ -14,6 +18,8 @@ import type {
   DeribitOption,
   BookMessage,
 } from '@polymarket-ws/shared-types';
+import { edgeConfig } from '../config/edge.config';
+import { polymarketConfig } from '../config/polymarket.config';
 import { DeribitWsService } from '../deribit/deribit-ws.service';
 import { ClobWsService } from '../polymarket/clob-ws/clob-ws.service';
 import { ClobRestService } from '../polymarket/clob-rest/clob-rest.service';
@@ -61,9 +67,6 @@ interface PolymarketEvent {
 @Injectable()
 export class EdgeService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(EdgeService.name);
-  private readonly GAMMA_API = 'https://gamma-api.polymarket.com';
-  private readonly BOOK_THROTTLE_MS = 500;
-  private readonly BOOK_REFRESH_MS = 10_000;
 
   /** marketId → cached market data */
   private marketCache = new Map<string, CachedMarket>();
@@ -81,13 +84,17 @@ export class EdgeService implements OnModuleInit, OnApplicationShutdown {
     private readonly deribitWsService: DeribitWsService,
     private readonly clobWsService: ClobWsService,
     private readonly clobRestService: ClobRestService,
+    @Inject(edgeConfig.KEY)
+    private readonly edgeCfg: ConfigType<typeof edgeConfig>,
+    @Inject(polymarketConfig.KEY)
+    private readonly polyCfg: ConfigType<typeof polymarketConfig>,
   ) {}
 
   async onModuleInit(): Promise<void> {
     await this.refreshMarkets();
     this.bookRefreshInterval = setInterval(
       () => this.fetchOrderbooks(),
-      this.BOOK_REFRESH_MS,
+      this.edgeCfg.bookRefreshMs,
     );
   }
 
@@ -339,7 +346,7 @@ export class EdgeService implements OnModuleInit, OnApplicationShutdown {
         this.bookRecalcTimers.delete(marketId);
         const market = this.marketCache.get(marketId);
         if (market) this.recalculateAndEmit(market);
-      }, this.BOOK_THROTTLE_MS),
+      }, this.edgeCfg.bookThrottleMs),
     );
   }
 
@@ -362,9 +369,9 @@ export class EdgeService implements OnModuleInit, OnApplicationShutdown {
     const edge = Math.abs(diff);
     let advice: 'BUY_YES' | 'BUY_NO' | 'NO_TRADE' = 'NO_TRADE';
 
-    if (diff > ARBITRAGE_EDGE_THRESHOLD) {
+    if (diff > this.edgeCfg.arbitrageEdgeThreshold) {
       advice = 'BUY_YES';
-    } else if (diff < -ARBITRAGE_EDGE_THRESHOLD) {
+    } else if (diff < -this.edgeCfg.arbitrageEdgeThreshold) {
       advice = 'BUY_NO';
     }
 
@@ -502,7 +509,7 @@ export class EdgeService implements OnModuleInit, OnApplicationShutdown {
   private async fetchBitcoinMarkets(): Promise<PolymarketApiMarket[]> {
     try {
       const { data } = await firstValueFrom(
-        this.httpService.get<PolymarketEvent[]>(`${this.GAMMA_API}/events`, {
+        this.httpService.get<PolymarketEvent[]>(`${this.polyCfg.gammaApiUrl}/events`, {
           params: { tag_slug: 'crypto', active: true, closed: false, limit: 500 },
         }),
       );
