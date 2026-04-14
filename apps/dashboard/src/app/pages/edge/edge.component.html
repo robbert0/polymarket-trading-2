@@ -35,19 +35,19 @@
         </colgroup>
         <thead class="text-xs text-gray-500 border-b border-gray-800">
           <tr>
-            <th class="py-3 pr-4">Market</th>
-            <th class="py-3 pr-4 text-right">Strike</th>
-            <th class="py-3 pr-4">Expiry</th>
-            <th class="py-3 pr-4 text-right">Deribit Prob</th>
-            <th class="py-3 pr-4 text-right">Polymarket</th>
-            <th class="py-3 pr-4 text-right">Edge</th>
-            <th class="py-3 pr-4 text-right">Exec Edge</th>
-            <th class="py-3 pr-4 text-right">Spread</th>
-            <th class="py-3 pr-4 text-right">Fillable</th>
-            <th class="py-3 pr-4 text-right">Fill</th>
-            <th class="py-3 pr-4">Advice</th>
-            <th class="py-3 pr-4 text-right">BTC Price</th>
-            <th class="py-3 pr-4 text-right">Deribit Mark IV</th>
+            <th class="py-3 pr-4 cursor-pointer select-none hover:text-gray-300" (click)="setSort('label')">Market{{ sortArrow('label') }}</th>
+            <th class="py-3 pr-4 text-right cursor-pointer select-none hover:text-gray-300" (click)="setSort('strike')">Strike{{ sortArrow('strike') }}</th>
+            <th class="py-3 pr-4 cursor-pointer select-none hover:text-gray-300" (click)="setSort('expiry')">Expiry{{ sortArrow('expiry') }}</th>
+            <th class="py-3 pr-4 text-right cursor-pointer select-none hover:text-gray-300" (click)="setSort('deribitProbability')">Deribit Prob{{ sortArrow('deribitProbability') }}</th>
+            <th class="py-3 pr-4 text-right cursor-pointer select-none hover:text-gray-300" (click)="setSort('polymarketProbability')">Polymarket{{ sortArrow('polymarketProbability') }}</th>
+            <th class="py-3 pr-4 text-right cursor-pointer select-none hover:text-gray-300" (click)="setSort('edge')">Edge{{ sortArrow('edge') }}</th>
+            <th class="py-3 pr-4 text-right cursor-pointer select-none hover:text-gray-300" (click)="setSort('execEdge')">Exec Edge{{ sortArrow('execEdge') }}</th>
+            <th class="py-3 pr-4 text-right cursor-pointer select-none hover:text-gray-300" (click)="setSort('spread')">Spread{{ sortArrow('spread') }}</th>
+            <th class="py-3 pr-4 text-right cursor-pointer select-none hover:text-gray-300" (click)="setSort('fillable')">Fillable{{ sortArrow('fillable') }}</th>
+            <th class="py-3 pr-4 text-right cursor-pointer select-none hover:text-gray-300" (click)="setSort('fillScore')">Fill{{ sortArrow('fillScore') }}</th>
+            <th class="py-3 pr-4 cursor-pointer select-none hover:text-gray-300" (click)="setSort('advice')">Advice{{ sortArrow('advice') }}</th>
+            <th class="py-3 pr-4 text-right cursor-pointer select-none hover:text-gray-300" (click)="setSort('underlyingPrice')">BTC Price{{ sortArrow('underlyingPrice') }}</th>
+            <th class="py-3 pr-4 text-right cursor-pointer select-none hover:text-gray-300" (click)="setSort('impliedVolatility')">Deribit Mark IV{{ sortArrow('impliedVolatility') }}</th>
           </tr>
         </thead>
         <tbody>

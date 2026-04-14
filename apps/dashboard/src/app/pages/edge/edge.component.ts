@@ -3,6 +3,23 @@ import { CommonModule } from '@angular/common';
 import { Subscription, retry, timer } from 'rxjs';
 import { EdgeService, EdgeComparison } from '../../services/edge.service';
 
+type SortKey =
+  | 'label'
+  | 'strike'
+  | 'expiry'
+  | 'deribitProbability'
+  | 'polymarketProbability'
+  | 'edge'
+  | 'execEdge'
+  | 'spread'
+  | 'fillable'
+  | 'fillScore'
+  | 'advice'
+  | 'underlyingPrice'
+  | 'impliedVolatility';
+
+type SortDir = 'asc' | 'desc';
+
 @Component({
   selector: 'app-edge',
   imports: [CommonModule],
@@ -14,6 +31,8 @@ export class EdgeComponent implements OnInit, OnDestroy {
   connected = false;
   updateCount = 0;
   lastScan = 0;
+  sortKey: SortKey = 'label';
+  sortDir: SortDir = 'asc';
   private sub?: Subscription;
 
   constructor(
@@ -51,9 +70,60 @@ export class EdgeComponent implements OnInit, OnDestroy {
 
   private updateEdge(data: EdgeComparison): void {
     this.edges.set(data.marketId, data);
-    this.sortedEdges = [...this.edges.values()].sort(
-      (a, b) => a.label.localeCompare(b.label),
-    );
+    this.resort();
+  }
+
+  private resort(): void {
+    const dir = this.sortDir === 'asc' ? 1 : -1;
+    const key = this.sortKey;
+    this.sortedEdges = [...this.edges.values()].sort((a, b) => {
+      const av = this.sortValue(a, key);
+      const bv = this.sortValue(b, key);
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1; // nulls always last
+      if (bv == null) return -1;
+      if (typeof av === 'string' && typeof bv === 'string') {
+        return av.localeCompare(bv) * dir;
+      }
+      return ((av as number) - (bv as number)) * dir;
+    });
+  }
+
+  private sortValue(
+    e: EdgeComparison,
+    key: SortKey,
+  ): number | string | null | undefined {
+    switch (key) {
+      case 'label': return e.label;
+      case 'strike': return e.strike;
+      case 'expiry': return e.expiry;
+      case 'deribitProbability': return e.deribitProbability;
+      case 'polymarketProbability': return e.polymarketProbability;
+      case 'edge': return e.edge;
+      case 'execEdge': return e.orderbook?.executableEdge ?? null;
+      case 'spread': return e.orderbook?.spread ?? null;
+      case 'fillable': return e.orderbook?.fillableAmount ?? null;
+      case 'fillScore': return e.orderbook?.fillScore ?? null;
+      case 'advice': return e.advice;
+      case 'underlyingPrice': return e.underlyingPrice;
+      case 'impliedVolatility': return e.impliedVolatility;
+    }
+  }
+
+  setSort(key: SortKey): void {
+    if (this.sortKey === key) {
+      this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortKey = key;
+      // Numeric/score columns default to descending (biggest first), text to ascending
+      this.sortDir = key === 'label' || key === 'expiry' || key === 'advice' ? 'asc' : 'desc';
+    }
+    this.resort();
+  }
+
+  sortArrow(key: SortKey): string {
+    if (this.sortKey !== key) return '';
+    return this.sortDir === 'asc' ? ' ↑' : ' ↓';
   }
 
   formatPercent(val: number): string {
