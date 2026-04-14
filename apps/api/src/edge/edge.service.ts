@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnApplicationShutdown } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OnEvent } from '@nestjs/event-emitter';
@@ -60,10 +60,11 @@ interface PolymarketEvent {
 }
 
 @Injectable()
-export class EdgeService implements OnModuleInit {
+export class EdgeService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(EdgeService.name);
   private readonly GAMMA_API = 'https://gamma-api.polymarket.com';
   private readonly BOOK_THROTTLE_MS = 500;
+  private readonly BOOK_REFRESH_MS = 10_000;
 
   /** marketId → cached market data */
   private marketCache = new Map<string, CachedMarket>();
@@ -73,6 +74,7 @@ export class EdgeService implements OnModuleInit {
   private tokenToMarket = new Map<string, string>();
   /** Trailing-edge throttle timers for book updates */
   private bookRecalcTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private bookRefreshInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly httpService: HttpService,
@@ -84,6 +86,21 @@ export class EdgeService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     await this.refreshMarkets();
+    this.bookRefreshInterval = setInterval(
+      () => this.fetchOrderbooks(),
+      this.BOOK_REFRESH_MS,
+    );
+  }
+
+  onApplicationShutdown(): void {
+    if (this.bookRefreshInterval) {
+      clearInterval(this.bookRefreshInterval);
+      this.bookRefreshInterval = null;
+    }
+    for (const timer of this.bookRecalcTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.bookRecalcTimers.clear();
   }
 
   /**
@@ -214,8 +231,11 @@ export class EdgeService implements OnModuleInit {
     );
 
     const fetched = results.filter((r) => r.status === 'fulfilled').length;
-    this.logger.log(
-      `Fetched orderbooks: ${fetched}/${entries.length} successful`,
+    if (fetched > 0) {
+      this.recalculateAllAndEmit();
+    }
+    this.logger.debug(
+      `Orderbook refresh: ${fetched}/${entries.length} successful`,
     );
   }
 
@@ -284,18 +304,24 @@ export class EdgeService implements OnModuleInit {
   @OnEvent(EVENTS.POLYMARKET.BOOK_UPDATE)
   onBookUpdate(payload: BookMessage): void {
     const marketId = this.tokenToMarket.get(payload.asset_id);
-    if (!marketId) return;
+    if (!marketId) {
+      this.logger.debug(
+        `Book update for untracked asset ${payload.asset_id?.substring(0, 12)}... (${payload.bids?.length ?? 0} bids, ${payload.asks?.length ?? 0} asks)`,
+      );
+      return;
+    }
+    this.logger.debug(`Book update for market ${marketId.substring(0, 12)}...`);
 
     const market = this.marketCache.get(marketId);
     if (!market) return;
 
-    market.bids = payload.bids
-      .map(([p, s]) => [parseFloat(p), parseFloat(s)] as [number, number])
+    market.bids = (payload.bids ?? [])
+      .map((b) => [parseFloat(b.price), parseFloat(b.size)] as [number, number])
       .filter(([p, s]) => p > 0 && s > 0)
       .sort((a, b) => b[0] - a[0]);
 
-    market.asks = payload.asks
-      .map(([p, s]) => [parseFloat(p), parseFloat(s)] as [number, number])
+    market.asks = (payload.asks ?? [])
+      .map((a) => [parseFloat(a.price), parseFloat(a.size)] as [number, number])
       .filter(([p, s]) => p > 0 && s > 0)
       .sort((a, b) => a[0] - b[0]);
 

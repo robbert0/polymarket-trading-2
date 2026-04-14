@@ -1,10 +1,15 @@
+export interface BookLevel {
+  price: string;
+  size: string;
+}
+
 export interface BookMessage {
   event_type: 'book';
   market: string;
   asset_id: string;
   timestamp: number;
-  bids: [string, string][];
-  asks: [string, string][];
+  bids: BookLevel[];
+  asks: BookLevel[];
   hash: string;
 }
 

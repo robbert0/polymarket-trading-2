@@ -43,11 +43,19 @@ export class EdgeService {
   streamEdge(): Observable<EdgeComparison> {
     return new Observable((subscriber) => {
       const es = new EventSource(`${this.baseUrl}/sse/edge`);
+      let lastEvent = Date.now();
+      const STALE_MS = 30_000;
 
       es.addEventListener('edge', (event: MessageEvent) => {
+        lastEvent = Date.now();
         this.zone.run(() => {
           subscriber.next(JSON.parse(event.data));
         });
+      });
+
+      // Server sends keepalive every 15s — use it to confirm liveness
+      es.addEventListener('keepalive', () => {
+        lastEvent = Date.now();
       });
 
       es.onerror = () => {
@@ -56,7 +64,19 @@ export class EdgeService {
         });
       };
 
-      return () => es.close();
+      // If no event (edge or keepalive) in STALE_MS, reconnect
+      const staleCheck = setInterval(() => {
+        if (Date.now() - lastEvent > STALE_MS) {
+          this.zone.run(() => {
+            subscriber.error(new Error('SSE stream stale'));
+          });
+        }
+      }, 5_000);
+
+      return () => {
+        clearInterval(staleCheck);
+        es.close();
+      };
     });
   }
 }

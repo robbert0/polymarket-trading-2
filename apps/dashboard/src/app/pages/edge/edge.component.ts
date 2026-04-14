@@ -57,7 +57,7 @@ export class EdgeComponent implements OnInit, OnDestroy {
   }
 
   formatPercent(val: number): string {
-    return (val * 100).toFixed(1) + '%';
+    return (val * 100).toFixed(2) + '%';
   }
 
   formatPrice(price: number): string {
@@ -83,7 +83,7 @@ export class EdgeComponent implements OnInit, OnDestroy {
   formatExecEdge(edge: EdgeComparison): string {
     if (edge.orderbook?.executableEdge == null) return '-';
     const val = edge.orderbook.executableEdge;
-    return (val > 0 ? '+' : '') + (val * 100).toFixed(1) + '%';
+    return (val > 0 ? '+' : '') + (val * 100).toFixed(2) + '%';
   }
 
   formatFillable(edge: EdgeComparison): string {
