@@ -12,7 +12,6 @@ import type {
   OrderbookDepth,
   DeribitTicker,
   DeribitOption,
-  PriceChangeMessage,
   BookMessage,
 } from '@polymarket-ws/shared-types';
 import { DeribitWsService } from '../deribit/deribit-ws.service';
@@ -227,6 +226,7 @@ export class EdgeService implements OnModuleInit, OnApplicationShutdown {
             .sort((a, b) => a[0] - b[0]);
         }
         market.bookTimestamp = Date.now();
+        this.updateYesPriceFromBook(market);
       }),
     );
 
@@ -281,24 +281,6 @@ export class EdgeService implements OnModuleInit, OnApplicationShutdown {
   }
 
   /**
-   * Polymarket CLOB price change — update YES price for the matching market.
-   */
-  @OnEvent(EVENTS.POLYMARKET.PRICE_CHANGE)
-  onPolymarketPriceChange(payload: PriceChangeMessage): void {
-    const marketId = this.tokenToMarket.get(payload.asset_id);
-    if (!marketId) return;
-
-    const market = this.marketCache.get(marketId);
-    if (!market) return;
-
-    const newPrice = parseFloat(payload.price);
-    if (isNaN(newPrice) || newPrice <= 0 || newPrice >= 1) return;
-
-    market.yesPrice = newPrice;
-    this.recalculateAndEmit(market);
-  }
-
-  /**
    * Polymarket CLOB book update — update orderbook for the matching market.
    */
   @OnEvent(EVENTS.POLYMARKET.BOOK_UPDATE)
@@ -326,8 +308,26 @@ export class EdgeService implements OnModuleInit, OnApplicationShutdown {
       .sort((a, b) => a[0] - b[0]);
 
     market.bookTimestamp = payload.timestamp;
+    this.updateYesPriceFromBook(market);
 
     this.scheduleBookRecalc(marketId);
+  }
+
+  /**
+   * Derive the canonical YES price from the current orderbook.
+   * Uses mid of best bid/ask when both available, else the single side.
+   * If the book is empty, leaves the existing yesPrice (e.g. outcomePrices bootstrap).
+   */
+  private updateYesPriceFromBook(market: CachedMarket): void {
+    const bestBid = market.bids[0]?.[0];
+    const bestAsk = market.asks[0]?.[0];
+    if (bestBid !== undefined && bestAsk !== undefined) {
+      market.yesPrice = (bestBid + bestAsk) / 2;
+    } else if (bestAsk !== undefined) {
+      market.yesPrice = bestAsk;
+    } else if (bestBid !== undefined) {
+      market.yesPrice = bestBid;
+    }
   }
 
   private scheduleBookRecalc(marketId: string): void {
