@@ -107,15 +107,16 @@ flowchart TB
   RP --> PCP
   RT --> TEP
 
-  LP[("Redis<br/>latest-prices:SYMBOL:SOURCE<br/>HASH, TTL 60s")]:::store
-  PCP -->|HSET| LP
-  TEP -.HGETALL.-> LP
+  LP[("In-process<br/>LatestPriceCache<br/>Map, lazy 60s TTL<br/>latest-price-cache.service.ts")]:::store
+  PCP -->|set| LP
+  TEP -.get.-> LP
 
   PC[[PRICE_CORRELATION]]:::q
   PCP --> PC
 
   CCP[CorrelationCombinerProcessor]:::svc
   PC --> CCP
+  CCP -.get.-> LP
 
   EV_DPC[derived.price_correlation]:::evt
   EV_DET[derived.enriched_trade]:::evt
@@ -131,7 +132,7 @@ flowchart TB
   ECP[EdgeCalculationProcessor<br/>concurrency=1, 1 job/10s]:::svc
   MSQ --> MSP
   ECQ --> ECP
-  MSP -.HGETALL.-> LP
+  MSP -.get.-> LP
   EV_DMS[derived.market_snapshot]:::evt
   MSP --> EV_DMS
 
@@ -139,7 +140,7 @@ flowchart TB
   EdgeSvc -. GET /markets .-> GAMMA[Polymarket Gamma REST]:::src
 ```
 
-**What the derivation layer does in one sentence:** merge fresh BTC/ETH prices from multiple sources via Redis staging so every downstream consumer (correlation, snapshot, trade enrichment, edge) sees a single-writer latest-price view.
+**What the derivation layer does in one sentence:** merge fresh BTC/ETH prices from multiple sources via an in-process cache (`LatestPriceCache`) so every downstream consumer (correlation, snapshot, trade enrichment, edge) sees a single-writer latest-price view — all four processors run in the same Node process, so no Redis round-trip is needed.
 
 ---
 
@@ -177,17 +178,17 @@ flowchart TB
   EV_DE --> OT
   EV_DE --> XT
 
-  PO[("Redis<br/>positions:open<br/>SET")]:::store
+  PS[("Postgres<br/>position_state VIEW<br/>(source of truth)")]:::store
   CD[("Redis<br/>trading:cooldown:mkt<br/>STRING+TTL")]:::store
   KS[("Redis<br/>trading:killswitch<br/>STRING")]:::store
 
   FILT{{"Trigger gates:<br/>killswitch OFF<br/>no existing position<br/>no cooldown<br/>minExecEdge / minFillScore /<br/>minFillableUsd"}}:::gate
   OT --> FILT
-  XT --> XFILT{{"Exit gates:<br/>SISMEMBER positions:open<br/>priority: expiry_flat ><br/>stop_loss > take_profit ><br/>edge_reversal"}}:::gate
-  FILT -.SISMEMBER.-> PO
+  XT --> XFILT{{"Exit gates:<br/>hasOpenPosition (PG)<br/>priority: expiry_flat ><br/>stop_loss > take_profit ><br/>edge_reversal"}}:::gate
+  FILT -.SELECT 1 FROM position_state.-> PS
   FILT -.EXISTS.-> CD
   FILT -.EXISTS.-> KS
-  XFILT -.SISMEMBER.-> PO
+  XFILT -.SELECT 1 FROM position_state.-> PS
 
   OEQ[["ORDER_EXECUTION queue<br/>concurrency=1<br/>limit 10/min<br/>3 retries exp backoff"]]:::q
 
@@ -206,7 +207,7 @@ flowchart TB
   OEP -->|"ENTRY only"| SZ
   OEP -->|"ENTRY only"| RS
   RS -.-> KS
-  RS -.-> PO
+  RS -.-> PS
   RS -.-> CD
 
   EX["OrderExecutor (strategy)<br/>PaperExecutor OR<br/>PolymarketExecutor"]:::svc
@@ -215,9 +216,8 @@ flowchart TB
   CLOB["Polymarket CLOB (live)<br/>EIP-712 signed, FAK + GTC fallback"]:::src
   EX -. placeBuy/placeSell .-> CLOB
 
-  PG[("Postgres<br/>orders + executions<br/>(single txn)")]:::store
+  PG[("Postgres<br/>orders + executions<br/>(single txn)<br/>→ position_state VIEW")]:::store
   OEP -->|INSERT| PG
-  OEP -->|"SADD on ENTRY fill<br/>SREM on EXIT close"| PO
   OEP -->|"SETEX on risk-fail<br/>or exit-fail"| CD
 
   EV_OE[trading.order_executed]:::evt
@@ -351,13 +351,13 @@ flowchart LR
   end
 
   subgraph R[Redis - non-BullMQ]
-    RK1["<b>positions:open</b><br/>SET of marketId<br/><br/>Rehydrated at boot from position_state<br/>(onModuleInit: DEL + SADD in MULTI)<br/>SADD on ENTRY fill<br/>SREM on EXIT close<br/>SISMEMBER hot path<br/>position-tracker.service.ts"]:::rk
+    RK2["<b>trading:cooldown:{marketId}</b><br/>STRING = '1', TTL seconds<br/><br/>SETEX on risk-fail / exit-fail<br/>EXISTS check in triggers<br/>position-tracker.service.ts"]:::rk
 
-    RK2["<b>trading:cooldown:{marketId}</b><br/>STRING = '1', TTL seconds<br/><br/>SETEX on risk-fail / exit-fail<br/>EXISTS check in triggers<br/>position-tracker.service.ts:250"]:::rk
+    RK3["<b>trading:killswitch</b><br/>STRING = '1' (or absent)<br/><br/>SET via POST /trading/pause<br/>DEL via POST /trading/resume<br/>EXISTS in risk gate<br/>position-tracker.service.ts"]:::rk
+  end
 
-    RK3["<b>trading:killswitch</b><br/>STRING = '1' (or absent)<br/><br/>SET via POST /trading/pause<br/>DEL via POST /trading/resume<br/>EXISTS in risk gate<br/>position-tracker.service.ts:266"]:::rk
-
-    RK4["<b>latest-prices:{symbol}:{source}</b><br/>HASH {price, timestamp}, TTL 60s<br/><br/>HSET by PriceCorrelationProcessor<br/>HGETALL by market-snapshot,<br/>trade-enrichment,<br/>correlation-combiner"]:::rk
+  subgraph IP[In-process state - single Node process]
+    IP1["<b>LatestPriceCache</b><br/>Map&lt;symbol:source, {price, ts}&gt;<br/>lazy 60s TTL on read<br/><br/>set by PriceCorrelationProcessor<br/>get by correlation-combiner,<br/>trade-enrichment,<br/>market-snapshot<br/>latest-price-cache.service.ts"]:::rk
   end
 ```
 
@@ -425,12 +425,20 @@ Dedup:
 
 ## Reference — Redis keys (non-BullMQ)
 
+Only two keys live in Redis outside of BullMQ. `hasOpenPosition` is a PG query against `position_state` (not a Redis lookup), and cross-processor price staging uses the in-process `LatestPriceCache` service instead of Redis.
+
 | Key | Type | Writer | Reader | TTL |
 |---|---|---|---|---|
-| `positions:open` | SET | `position-tracker.service.ts` onModuleInit (DEL + SADD MULTI, rehydrate from `position_state`), `recordOrder` (SADD on ENTRY fill, SREM on EXIT close) | `hasOpenPosition` (SISMEMBER), `openCount` (SCARD), `order-trigger.service.ts`, `exit-trigger.service.ts` | none |
-| `trading:cooldown:{marketId}` | STRING | `position-tracker.service.ts:250` (SET EX), `order-execution.processor.ts:96,145,210` | `order-trigger.service.ts`, `exit-trigger.service.ts` | `cfg.risk.marketCooldownSec` (ENTRY fail) / `cfg.exits.exitCooldownSec` (EXIT fail) |
-| `trading:killswitch` | STRING | `position-tracker.service.ts:266` (SET=1 on pause), `:268` (DEL on resume) | `order.controller.ts:54`, risk gate | none |
-| `latest-prices:{symbol}:{source}` | HASH `{price, timestamp}` | `price-correlation.processor.ts:51` (HSET) | `market-snapshot.processor.ts:51`, `trade-enrichment.processor.ts:48`, `correlation-combiner.processor.ts:77` | 60 s |
+| `trading:cooldown:{marketId}` | STRING | `position-tracker.service.ts` (SET EX), `order-execution.processor.ts` | `order-trigger.service.ts`, `exit-trigger.service.ts` | `cfg.risk.marketCooldownSec` (ENTRY fail) / `cfg.exits.exitCooldownSec` (EXIT fail) |
+| `trading:killswitch` | STRING | `position-tracker.service.ts` (SET=1 on pause, DEL on resume) | `order.controller.ts`, risk gate | none |
+
+### In-process state (not Redis)
+
+| Store | Shape | Writer | Reader | TTL |
+|---|---|---|---|---|
+| `LatestPriceCache` (`apps/api/src/queue/latest-price-cache.service.ts`) | `Map<symbol:source, {price, timestamp}>` | `price-correlation.processor.ts` (`set`) | `correlation-combiner.processor.ts`, `trade-enrichment.processor.ts`, `market-snapshot.processor.ts` (`get`) | lazy 60 s on read |
+
+> **Clustering caveat:** `LatestPriceCache` is per-process. If the API is ever run as more than one Node instance, move this back to Redis (or a pub/sub channel) so writers in one process are visible to readers in another. Today a single process runs all producers and consumers, so in-process is strictly simpler.
 
 ---
 
@@ -480,13 +488,13 @@ Follow one signal end-to-end:
 
 1. Deribit WS pushes BTC ticker → `DeribitWsService` emits `deribit.ticker`.
 2. `EdgeService` recomputes edge for every tracked Polymarket market using cached CLOB book + Deribit option surface → emits `derived.edge`.
-3. `OrderTriggerService.onEdge` checks gates (killswitch off via `trading:killswitch`, no position via `SISMEMBER positions:open`, no cooldown via `EXISTS trading:cooldown:mkt`, exec-edge/fillScore/fillableUsd thresholds).
+3. `OrderTriggerService.onEdge` checks gates (killswitch off via `trading:killswitch`, no position via `hasOpenPosition` → `SELECT 1 FROM position_state WHERE market_id = $1 LIMIT 1`, no cooldown via `EXISTS trading:cooldown:mkt`, exec-edge/fillScore/fillableUsd thresholds).
 4. Passes → enqueues `jobId=order:mkt:minuteBucket` with `kind=ENTRY` on `ORDER_EXECUTION`.
 5. `OrderExecutionProcessor` (concurrency=1) picks up → `SizingService` → `RiskService` (max positions, notional, bankroll) → `PaperExecutor.placeBuy` (synthetic fill at `refPrice`).
-6. Postgres single txn: INSERT `orders` (status=`filled`, kind=`ENTRY`) + INSERT `executions`.
-7. Redis: SADD `positions:open`. Paper bankroll decrements via `BankrollCacheService.applyPaperDelta(-notional)`.
+6. Postgres single txn: INSERT `orders` (status=`filled`, kind=`ENTRY`) + INSERT `executions`. `position_state` VIEW now reflects the open position — no separate cache to update.
+7. Paper bankroll decrements via `BankrollCacheService.applyPaperDelta(-notional)`.
 8. Emits `trading.order_executed` + `trading.position_opened`.
 9. `SseController` sees `trading.order_executed` → pushes on `/api/sse/orders`.
 10. Dashboard `orders.service.ts` EventSource → `orders.component.ts` prepends row, refreshes positions table.
 
-The same trace in reverse for manual close: dashboard POSTs `/api/positions/:mkt/close` → controller enqueues EXIT with `kind=EXIT, closeReason=manual, priority=1, no jobId` → processor runs `placeSell` path → `SREM positions:open` on full close → `trading.position_closed` → SSE → dashboard row disappears.
+The same trace in reverse for manual close: dashboard POSTs `/api/positions/:mkt/close` → controller enqueues EXIT with `kind=EXIT, closeReason=manual, priority=1, no jobId` → processor runs `placeSell` path → INSERT `orders` + `executions` (EXIT row) → `position_state` VIEW netting drops `total_size` to 0 so the market disappears from the view → `trading.position_closed` → SSE → dashboard row disappears.

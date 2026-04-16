@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { QUEUES } from '@polymarket-ws/shared-types';
 import { EdgeModule } from '../edge/edge.module';
 import { EnqueueService } from './enqueue.service';
+import { LatestPriceCache } from './latest-price-cache.service';
 import { PriceCorrelationProcessor } from './processors/price-correlation.processor';
 import { TradeEnrichmentProcessor } from './processors/trade-enrichment.processor';
 import { MarketSnapshotProcessor } from './processors/market-snapshot.processor';
@@ -35,6 +36,7 @@ import { EdgeCalculationProcessor } from './processors/edge-calculation.processo
   ],
   providers: [
     EnqueueService,
+    LatestPriceCache,
     PriceCorrelationProcessor,
     TradeEnrichmentProcessor,
     MarketSnapshotProcessor,

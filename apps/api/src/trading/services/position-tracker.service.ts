@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { Pool } from 'pg';
 import Redis from 'ioredis';
@@ -12,17 +12,20 @@ import { PG_POOL } from '../../database/database.module';
 import { REDIS_CLIENT } from '../redis.provider';
 import type { OrderExecutionResult } from '../executors/order-executor.interface';
 
-const REDIS_KEY_POSITIONS_OPEN = 'positions:open';
 const REDIS_KEY_COOLDOWN_PREFIX = 'trading:cooldown:';
 const REDIS_KEY_KILLSWITCH = 'trading:killswitch';
 
 /**
  * Writes orders + executions to Postgres (append-only, immutable fills).
- * Maintains a hot Redis cache of open-position marketIds so hot-path
- * duplicate-checks in OrderTriggerService don't hit Postgres on every edge event.
+ * Open-position membership is read directly from `position_state` (PG) — no
+ * Redis cache. At current volumes a single indexed lookup is fine and avoids
+ * the cache/source-of-truth dance.
+ *
+ * Redis is still used for transient operator state (cooldowns + killswitch)
+ * where native TTL / atomic SET/DEL makes the code simpler.
  */
 @Injectable()
-export class PositionTrackerService implements OnModuleInit {
+export class PositionTrackerService {
   private readonly logger = new Logger(PositionTrackerService.name);
 
   constructor(
@@ -31,39 +34,9 @@ export class PositionTrackerService implements OnModuleInit {
   ) {}
 
   /**
-   * Rebuild the Redis positions:open set from Postgres position_state at boot.
-   * Protects the trigger hot-path from false negatives if Redis was flushed,
-   * the key TTL'd, or the deployment swapped instances without a shared cache.
-   * Postgres is the source of truth; Redis is a cache.
-   */
-  async onModuleInit(): Promise<void> {
-    const { rows } = await this.pool.query<{ market_id: string }>(
-      `SELECT DISTINCT market_id FROM position_state`,
-    );
-
-    if (rows.length === 0) {
-      this.logger.log('positions:open rehydrate — no open positions found');
-      return;
-    }
-
-    // Atomic replace: DEL drops any stale entries (e.g. Postgres reset while
-    // Redis wasn't), SADD rebuilds. MULTI keeps it atomic so the trigger
-    // services never observe a half-rebuilt set.
-    const pipeline = this.redis.multi();
-    pipeline.del(REDIS_KEY_POSITIONS_OPEN);
-    for (const { market_id } of rows) {
-      pipeline.sadd(REDIS_KEY_POSITIONS_OPEN, market_id);
-    }
-    await pipeline.exec();
-
-    this.logger.log(
-      `positions:open rehydrated with ${rows.length} market(s) from position_state`,
-    );
-  }
-
-  /**
-   * Persists a new order row + fills (if any) atomically, and updates the
-   * Redis positions:open cache iff the order produced fills.
+   * Persists a new order row + fills atomically (orders + executions in one
+   * PG transaction). Position membership is derived from this data via the
+   * `position_state` VIEW — no separate cache to update.
    */
   async recordOrder(
     intent: OrderIntent,
@@ -173,23 +146,6 @@ export class PositionTrackerService implements OnModuleInit {
       client.release();
     }
 
-    if (filledSize > 0) {
-      if (record.kind === 'ENTRY') {
-        await this.redis.sadd(REDIS_KEY_POSITIONS_OPEN, intent.marketId);
-      } else {
-        // EXIT: if position_state no longer carries this (market,token,side),
-        // the position is fully closed → drop from the hot-path set.
-        const stillOpen = await this.pool.query<{ total: string }>(
-          `SELECT total_size::text AS total FROM position_state
-           WHERE market_id = $1 AND token_id = $2 AND side = $3`,
-          [intent.marketId, intent.tokenId, intent.side],
-        );
-        if (stillOpen.rowCount === 0) {
-          await this.redis.srem(REDIS_KEY_POSITIONS_OPEN, intent.marketId);
-        }
-      }
-    }
-
     this.logger.log(
       `Recorded ${record.kind} ${id.slice(0, 8)} ${record.side} ${record.label} — ${record.status} (${filledSize}/${requestedSize} @ $${avgFillPrice.toFixed(4)})${record.closeReason ? ` reason=${record.closeReason}` : ''}`,
     );
@@ -198,13 +154,18 @@ export class PositionTrackerService implements OnModuleInit {
   }
 
   async hasOpenPosition(marketId: string): Promise<boolean> {
-    return (
-      (await this.redis.sismember(REDIS_KEY_POSITIONS_OPEN, marketId)) === 1
+    const { rowCount } = await this.pool.query(
+      `SELECT 1 FROM position_state WHERE market_id = $1 LIMIT 1`,
+      [marketId],
     );
+    return (rowCount ?? 0) > 0;
   }
 
   async openCount(): Promise<number> {
-    return this.redis.scard(REDIS_KEY_POSITIONS_OPEN);
+    const { rows } = await this.pool.query<{ count: string }>(
+      `SELECT COUNT(DISTINCT market_id)::text AS count FROM position_state`,
+    );
+    return parseInt(rows[0]?.count ?? '0', 10);
   }
 
   /** Sums cost_basis over open positions from Postgres. */
