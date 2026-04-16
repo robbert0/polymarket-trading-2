@@ -5,4 +5,5 @@ export const QUEUES = {
   PRICE_CORRELATION: 'price-correlation',
   MARKET_SNAPSHOT: 'market-snapshot',
   EDGE_CALCULATION: 'edge-calculation',
+  ORDER_EXECUTION: 'order-execution',
 } as const;

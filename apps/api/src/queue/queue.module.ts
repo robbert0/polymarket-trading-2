@@ -30,6 +30,7 @@ import { EdgeCalculationProcessor } from './processors/edge-calculation.processo
       { name: QUEUES.PRICE_CORRELATION },
       { name: QUEUES.MARKET_SNAPSHOT },
       { name: QUEUES.EDGE_CALCULATION },
+      { name: QUEUES.ORDER_EXECUTION },
     ),
     EdgeModule,
   ],

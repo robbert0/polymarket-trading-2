@@ -182,4 +182,40 @@ export class SseController {
       };
     });
   }
+
+  @Sse('orders')
+  streamOrders(@Req() req: Request): Observable<MessageEvent> {
+    return new Observable((subscriber) => {
+      const executedHandler = (payload: unknown) => {
+        subscriber.next({ data: payload, type: 'order_executed' } as MessageEvent);
+      };
+      const failedHandler = (payload: unknown) => {
+        subscriber.next({ data: payload, type: 'order_failed' } as MessageEvent);
+      };
+      const bankrollHandler = (payload: unknown) => {
+        subscriber.next({ data: payload, type: 'bankroll' } as MessageEvent);
+      };
+      const killHandler = (payload: unknown) => {
+        subscriber.next({ data: payload, type: 'killswitch' } as MessageEvent);
+      };
+
+      this.eventEmitter.on(EVENTS.TRADING.ORDER_EXECUTED, executedHandler);
+      this.eventEmitter.on(EVENTS.TRADING.ORDER_FAILED, failedHandler);
+      this.eventEmitter.on(EVENTS.TRADING.BANKROLL_UPDATED, bankrollHandler);
+      this.eventEmitter.on(EVENTS.TRADING.KILLSWITCH_CHANGED, killHandler);
+
+      const keepalive = setInterval(() => {
+        subscriber.next({ data: '', type: 'keepalive' } as MessageEvent);
+      }, 15_000);
+
+      req.on('close', () => subscriber.complete());
+      return () => {
+        clearInterval(keepalive);
+        this.eventEmitter.off(EVENTS.TRADING.ORDER_EXECUTED, executedHandler);
+        this.eventEmitter.off(EVENTS.TRADING.ORDER_FAILED, failedHandler);
+        this.eventEmitter.off(EVENTS.TRADING.BANKROLL_UPDATED, bankrollHandler);
+        this.eventEmitter.off(EVENTS.TRADING.KILLSWITCH_CHANGED, killHandler);
+      };
+    });
+  }
 }

@@ -14,3 +14,15 @@ export type {
   MarketSnapshot,
 } from './lib/types/correlation';
 export type { EdgeComparison, ParsedBet, OrderbookDepth } from './lib/types/edge';
+export type {
+  OrderSide,
+  OrderStatus,
+  TradingMode,
+  OrderKind,
+  CloseReason,
+  OrderIntent,
+  ExecutionFill,
+  OrderRecord,
+  Position,
+  BankrollSnapshot,
+} from './lib/types/trading';

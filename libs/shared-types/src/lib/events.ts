@@ -23,4 +23,15 @@ export const EVENTS = {
     MARKET_SNAPSHOT: 'derived.market_snapshot',
     EDGE: 'derived.edge',
   },
+  TRADING: {
+    ORDER_INTENT: 'trading.order_intent',
+    ORDER_EXECUTED: 'trading.order_executed',
+    ORDER_FAILED: 'trading.order_failed',
+    POSITION_OPENED: 'trading.position_opened',
+    POSITION_UPDATED: 'trading.position_updated',
+    POSITION_CLOSED: 'trading.position_closed',
+    EXIT_INTENT: 'trading.exit_intent',
+    KILLSWITCH_CHANGED: 'trading.killswitch_changed',
+    BANKROLL_UPDATED: 'trading.bankroll_updated',
+  },
 } as const;

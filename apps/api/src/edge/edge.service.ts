@@ -33,6 +33,8 @@ interface CachedMarket {
   instrumentName: string;
   yesPrice: number;
   yesTokenId: string;
+  /** NO-outcome CLOB token ID. Used for BUY_NO order placement. */
+  noTokenId: string;
   iv: number;
   spotPrice: number;
   slug?: string;
@@ -41,6 +43,8 @@ interface CachedMarket {
   bids: [number, number][];
   asks: [number, number][];
   bookTimestamp: number;
+  /** Last computed EdgeComparison, refreshed on every recalculateAndEmit. */
+  lastComparison?: EdgeComparison;
 }
 
 interface PolymarketApiMarket {
@@ -126,7 +130,13 @@ export class EdgeService implements OnModuleInit, OnApplicationShutdown {
       let tokenIds: string[];
       let outcomes: string[];
       try {
-        prices = JSON.parse(market.outcomePrices);
+        // Polymarket returns outcomePrices as a JSON array of *strings* ("0.24").
+        // Coerce to numbers here so `market.yesPrice` is always numeric — otherwise
+        // downstream consumers end up calling `.toFixed` on a string until the
+        // first orderbook fetch overwrites it.
+        prices = (JSON.parse(market.outcomePrices) as unknown[]).map((p) =>
+          Number(p),
+        );
         tokenIds = JSON.parse(market.clobTokenIds);
         outcomes = JSON.parse(market.outcomes);
       } catch {
@@ -141,8 +151,9 @@ export class EdgeService implements OnModuleInit, OnApplicationShutdown {
 
       const yesPrice = prices[yesIndex];
       const yesTokenId = tokenIds[yesIndex];
+      const noTokenId = tokenIds[1 - yesIndex];
       if (!yesPrice || yesPrice <= 0 || yesPrice >= 1) continue;
-      if (!yesTokenId) continue;
+      if (!yesTokenId || !noTokenId) continue;
 
       const instrumentName = `BTC-${parsed.expiry}-${parsed.strike}-C`;
       const expiryDate = this.parseExpiryToISO(parsed.expiry);
@@ -162,6 +173,7 @@ export class EdgeService implements OnModuleInit, OnApplicationShutdown {
         instrumentName,
         yesPrice,
         yesTokenId,
+        noTokenId,
         iv: existing?.iv ?? 0,
         spotPrice: existing?.spotPrice ?? 0,
         slug: market.slug,
@@ -170,6 +182,7 @@ export class EdgeService implements OnModuleInit, OnApplicationShutdown {
         bids: existing?.bids ?? [],
         asks: existing?.asks ?? [],
         bookTimestamp: existing?.bookTimestamp ?? 0,
+        lastComparison: existing?.lastComparison,
       });
 
       this.instrumentToMarket.set(instrumentName, market.id);
@@ -409,7 +422,41 @@ export class EdgeService implements OnModuleInit, OnApplicationShutdown {
       orderbook,
     };
 
+    market.lastComparison = comparison;
     this.eventEmitter.emit(EVENTS.DERIVED.EDGE, comparison);
+  }
+
+  /**
+   * Public read: last emitted EdgeComparison for a given marketId.
+   * Used by the trading pipeline to re-validate a queued order before placing.
+   */
+  getMarket(marketId: string): EdgeComparison | undefined {
+    return this.marketCache.get(marketId)?.lastComparison;
+  }
+
+  /**
+   * Public read: resolves either a YES or NO CLOB tokenId to the market.
+   * Used by BankrollCacheService to price open positions at current mid.
+   */
+  getMarketByTokenId(tokenId: string): EdgeComparison | undefined {
+    for (const market of this.marketCache.values()) {
+      if (market.yesTokenId === tokenId || market.noTokenId === tokenId) {
+        return market.lastComparison;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Resolves YES/NO tokenId + label for a given marketId. Used by
+   * OrderTriggerService to build an OrderIntent for BUY_NO.
+   */
+  getTokens(marketId: string):
+    | { yesTokenId: string; noTokenId: string; label: string }
+    | undefined {
+    const m = this.marketCache.get(marketId);
+    if (!m) return undefined;
+    return { yesTokenId: m.yesTokenId, noTokenId: m.noTokenId, label: m.label };
   }
 
   private computeOrderbookDepth(

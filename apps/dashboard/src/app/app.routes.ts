@@ -42,4 +42,11 @@ export const appRoutes: Routes = [
         (m) => m.EdgeComponent,
       ),
   },
+  {
+    path: 'orders',
+    loadComponent: () =>
+      import('./pages/orders/orders.component').then(
+        (m) => m.OrdersComponent,
+      ),
+  },
 ];
