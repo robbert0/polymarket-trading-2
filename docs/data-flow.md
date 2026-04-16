@@ -94,15 +94,12 @@ flowchart TB
   EV_PT --> EnqSvc
   EV_PCP --> EnqSvc
   EV_DT --> EnqSvc
-  EV_PBU --> EnqSvc
 
   RP[[RAW_PRICES]]:::q
   RT[[RAW_TRADES]]:::q
-  RO[[RAW_ORDERBOOK]]:::q
 
   EnqSvc -->|crypto_price + deribit.ticker| RP
   EnqSvc -->|trade| RT
-  EnqSvc -->|book_update 1s debounced| RO
 
   PCP[PriceCorrelationProcessor<br/>price-correlation.processor.ts]:::svc
   TEP[TradeEnrichmentProcessor<br/>trade-enrichment.processor.ts]:::svc
@@ -354,7 +351,7 @@ flowchart LR
   end
 
   subgraph R[Redis - non-BullMQ]
-    RK1["<b>positions:open</b><br/>SET of marketId<br/><br/>SADD on ENTRY fill<br/>SREM on EXIT close<br/>SISMEMBER hot path<br/>position-tracker.service.ts:147,157,171"]:::rk
+    RK1["<b>positions:open</b><br/>SET of marketId<br/><br/>Rehydrated at boot from position_state<br/>(onModuleInit: DEL + SADD in MULTI)<br/>SADD on ENTRY fill<br/>SREM on EXIT close<br/>SISMEMBER hot path<br/>position-tracker.service.ts"]:::rk
 
     RK2["<b>trading:cooldown:{marketId}</b><br/>STRING = '1', TTL seconds<br/><br/>SETEX on risk-fail / exit-fail<br/>EXISTS check in triggers<br/>position-tracker.service.ts:250"]:::rk
 
@@ -414,7 +411,6 @@ Constants in `libs/shared-types/src/lib/queues.ts`.
 |---|---|---|---|
 | `RAW_PRICES` | `enqueue.service.ts:38,50` (on crypto_price + deribit.ticker) | `price-correlation.processor.ts:14` | default concurrency; job removal: age 300 s / 1000 on complete |
 | `RAW_TRADES` | `enqueue.service.ts:62` (on polymarket.trade) | `trade-enrichment.processor.ts:11` | default; age 3600 s / 5000 on complete |
-| `RAW_ORDERBOOK` | `enqueue.service.ts:70` (1 s debounce per asset_id) | consumed internally for snapshot | — |
 | `PRICE_CORRELATION` | `price-correlation.processor.ts:77` | `correlation-combiner.processor.ts` | default |
 | `MARKET_SNAPSHOT` | `enqueue.service.ts:23` (repeatable, 30 s) | `market-snapshot.processor.ts:11` | default |
 | `EDGE_CALCULATION` | `enqueue.service.ts:30` (repeatable, 60 s) | `edge-calculation.processor.ts:7` | **concurrency 1, 1 job / 10 s** |
@@ -431,7 +427,7 @@ Dedup:
 
 | Key | Type | Writer | Reader | TTL |
 |---|---|---|---|---|
-| `positions:open` | SET | `position-tracker.service.ts:147` (SADD on ENTRY), `:157` (SREM on EXIT close) | `:171` (SISMEMBER), `:176` (SCARD), `order-trigger.service.ts`, `exit-trigger.service.ts` | none |
+| `positions:open` | SET | `position-tracker.service.ts` onModuleInit (DEL + SADD MULTI, rehydrate from `position_state`), `recordOrder` (SADD on ENTRY fill, SREM on EXIT close) | `hasOpenPosition` (SISMEMBER), `openCount` (SCARD), `order-trigger.service.ts`, `exit-trigger.service.ts` | none |
 | `trading:cooldown:{marketId}` | STRING | `position-tracker.service.ts:250` (SET EX), `order-execution.processor.ts:96,145,210` | `order-trigger.service.ts`, `exit-trigger.service.ts` | `cfg.risk.marketCooldownSec` (ENTRY fail) / `cfg.exits.exitCooldownSec` (EXIT fail) |
 | `trading:killswitch` | STRING | `position-tracker.service.ts:266` (SET=1 on pause), `:268` (DEL on resume) | `order.controller.ts:54`, risk gate | none |
 | `latest-prices:{symbol}:{source}` | HASH `{price, timestamp}` | `price-correlation.processor.ts:51` (HSET) | `market-snapshot.processor.ts:51`, `trade-enrichment.processor.ts:48`, `correlation-combiner.processor.ts:77` | 60 s |

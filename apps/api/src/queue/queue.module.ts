@@ -26,7 +26,6 @@ import { EdgeCalculationProcessor } from './processors/edge-calculation.processo
     BullModule.registerQueue(
       { name: QUEUES.RAW_PRICES },
       { name: QUEUES.RAW_TRADES },
-      { name: QUEUES.RAW_ORDERBOOK },
       { name: QUEUES.PRICE_CORRELATION },
       { name: QUEUES.MARKET_SNAPSHOT },
       { name: QUEUES.EDGE_CALCULATION },

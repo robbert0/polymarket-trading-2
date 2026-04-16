@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { Pool } from 'pg';
 import Redis from 'ioredis';
@@ -22,13 +22,44 @@ const REDIS_KEY_KILLSWITCH = 'trading:killswitch';
  * duplicate-checks in OrderTriggerService don't hit Postgres on every edge event.
  */
 @Injectable()
-export class PositionTrackerService {
+export class PositionTrackerService implements OnModuleInit {
   private readonly logger = new Logger(PositionTrackerService.name);
 
   constructor(
     @Inject(PG_POOL) private readonly pool: Pool,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
+
+  /**
+   * Rebuild the Redis positions:open set from Postgres position_state at boot.
+   * Protects the trigger hot-path from false negatives if Redis was flushed,
+   * the key TTL'd, or the deployment swapped instances without a shared cache.
+   * Postgres is the source of truth; Redis is a cache.
+   */
+  async onModuleInit(): Promise<void> {
+    const { rows } = await this.pool.query<{ market_id: string }>(
+      `SELECT DISTINCT market_id FROM position_state`,
+    );
+
+    if (rows.length === 0) {
+      this.logger.log('positions:open rehydrate — no open positions found');
+      return;
+    }
+
+    // Atomic replace: DEL drops any stale entries (e.g. Postgres reset while
+    // Redis wasn't), SADD rebuilds. MULTI keeps it atomic so the trigger
+    // services never observe a half-rebuilt set.
+    const pipeline = this.redis.multi();
+    pipeline.del(REDIS_KEY_POSITIONS_OPEN);
+    for (const { market_id } of rows) {
+      pipeline.sadd(REDIS_KEY_POSITIONS_OPEN, market_id);
+    }
+    await pipeline.exec();
+
+    this.logger.log(
+      `positions:open rehydrated with ${rows.length} market(s) from position_state`,
+    );
+  }
 
   /**
    * Persists a new order row + fills (if any) atomically, and updates the
