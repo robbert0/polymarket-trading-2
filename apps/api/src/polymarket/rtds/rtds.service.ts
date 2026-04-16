@@ -91,18 +91,6 @@ export class RtdsService implements OnModuleInit, OnApplicationShutdown {
     this.logger.log('Subscribed to comments');
   }
 
-  unsubscribeTrades(filters?: { marketSlug?: string; eventSlug?: string }): void {
-    this.client.unsubscribe({
-      subscriptions: [
-        {
-          topic: 'activity',
-          type: 'trades',
-          ...(filters && { filters: JSON.stringify(filters) }),
-        },
-      ],
-    });
-  }
-
   getConnectionStatus(): string {
     return this.client ? 'connected' : 'disconnected';
   }

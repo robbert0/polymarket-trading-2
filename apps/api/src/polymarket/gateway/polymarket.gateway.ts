@@ -60,6 +60,7 @@ export class PolymarketGateway
   @SubscribeMessage('subscribe:crypto_prices')
   handleSubscribeCryptoPrices(@ConnectedSocket() client: Socket): void {
     client.join('crypto_prices');
+    this.rtdsService.subscribeCryptoPrices();
     this.logger.debug(`Client ${client.id} subscribed to crypto prices`);
   }
 

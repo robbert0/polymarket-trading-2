@@ -7,7 +7,6 @@ import { Queue } from 'bullmq';
 const QUEUE_NAMES = [
   'raw-prices',
   'raw-trades',
-  'raw-orderbook',
   'price-correlation',
   'market-snapshot',
   'edge-calculation',

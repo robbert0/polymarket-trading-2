@@ -37,8 +37,16 @@ export class SseController {
         subscriber.next({ data: payload } as MessageEvent);
       };
       this.eventEmitter.on('polymarket.trade', handler);
+
+      const keepalive = setInterval(() => {
+        subscriber.next({ data: '', type: 'keepalive' } as MessageEvent);
+      }, 15_000);
+
       req.on('close', () => subscriber.complete());
-      return () => this.eventEmitter.off('polymarket.trade', handler);
+      return () => {
+        clearInterval(keepalive);
+        this.eventEmitter.off('polymarket.trade', handler);
+      };
     });
   }
 
