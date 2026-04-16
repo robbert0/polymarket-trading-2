@@ -6,6 +6,10 @@
 
 [Learn more about this workspace setup and its capabilities](https://nx.dev/nx-api/nest?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
 
+## Architecture
+
+See [`docs/data-flow.md`](docs/data-flow.md) for a full map of how data moves through the system — external sources (Polymarket RTDS/CLOB, Deribit, Binance), the EventEmitter2 bus, BullMQ queues, Postgres tables, Redis keys, and SSE/WS streams out to the dashboard.
+
 ## Run tasks
 
 To run the dev server for your app, use:
