@@ -6,6 +6,7 @@ import {
   DeribitTicker,
   DeribitOption,
 } from '../../services/deribit.service';
+import { formatDateTime } from '../../utils/format-time';
 
 @Component({
   selector: 'app-deribit',
@@ -82,7 +83,5 @@ export class DeribitComponent implements OnInit, OnDestroy {
     return (rate * 100).toFixed(4) + '%';
   }
 
-  formatTime(ts: number): string {
-    return new Date(ts).toLocaleTimeString();
-  }
+  readonly formatTime = formatDateTime;
 }

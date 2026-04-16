@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription, retry, timer } from 'rxjs';
 import { CryptoPrice, CryptoPricesService } from '../../services/crypto-prices.service';
+import { formatDateTime } from '../../utils/format-time';
 
 interface CryptoRow {
   symbol: string;
@@ -105,9 +106,7 @@ export class CryptoPricesComponent implements OnInit, OnDestroy {
     return price.toFixed(6);
   }
 
-  formatTime(ts: number): string {
-    return new Date(ts).toLocaleTimeString();
-  }
+  readonly formatTime = formatDateTime;
 
   cleanSymbol(symbol: string): string {
     return symbol.replace('USDT', '');

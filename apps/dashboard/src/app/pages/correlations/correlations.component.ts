@@ -6,6 +6,7 @@ import {
   PriceCorrelation,
   EnrichedTrade,
 } from '../../services/correlations.service';
+import { formatDateTime } from '../../utils/format-time';
 
 @Component({
   selector: 'app-correlations',
@@ -78,7 +79,5 @@ export class CorrelationsComponent implements OnInit, OnDestroy {
     return val.toFixed(4) + '%';
   }
 
-  formatTime(ts: number): string {
-    return new Date(ts).toLocaleTimeString();
-  }
+  readonly formatTime = formatDateTime;
 }

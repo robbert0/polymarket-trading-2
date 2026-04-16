@@ -14,6 +14,32 @@ import {
   Position,
   TradingStatus,
 } from '../../services/orders.service';
+import { formatDateTime } from '../../utils/format-time';
+
+type OrdersSortKey =
+  | 'time'
+  | 'mode'
+  | 'kind'
+  | 'market'
+  | 'side'
+  | 'size'
+  | 'ref'
+  | 'avgFill'
+  | 'edge'
+  | 'execEdge'
+  | 'status'
+  | 'reason'
+  | 'error';
+
+type PositionsSortKey =
+  | 'market'
+  | 'side'
+  | 'size'
+  | 'avgEntry'
+  | 'costBasis'
+  | 'opened';
+
+type SortDir = 'asc' | 'desc';
 
 @Component({
   selector: 'app-orders',
@@ -30,6 +56,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   connected = false;
   streamError: string | null = null;
   closing = new Set<string>();
+  ordersSortKey: OrdersSortKey = 'time';
+  ordersSortDir: SortDir = 'desc';
+  positionsSortKey: PositionsSortKey = 'opened';
+  positionsSortDir: SortDir = 'desc';
   private sub?: Subscription;
   private pollSub?: Subscription;
 
@@ -55,6 +85,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.ordersService.listRecent(100).subscribe({
       next: (rows) => {
         this.orders = rows;
+        this.applyOrdersSort();
         this.cdr.detectChanges();
       },
       error: (err) => {
@@ -68,6 +99,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.ordersService.listPositions().subscribe({
       next: (rows) => {
         this.positions = rows;
+        this.applyPositionsSort();
         this.cdr.detectChanges();
       },
       error: () => undefined,
@@ -133,6 +165,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (ev.type === 'keepalive') return;
     if (ev.type === 'order_executed' || ev.type === 'order_failed') {
       this.orders = [ev.data, ...this.orders].slice(0, 200);
+      this.applyOrdersSort();
       // Any fill (ENTRY or EXIT) changes position state — re-pull.
       this.loadPositions();
     } else if (ev.type === 'bankroll' && this.status) {
@@ -173,10 +206,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     return '$' + Number(v).toFixed(4);
   }
 
-  formatTime(ts: number | null | undefined): string {
-    if (!ts) return '-';
-    return new Date(ts).toLocaleTimeString();
-  }
+  readonly formatTime = formatDateTime;
 
   formatMoney(v: number | null | undefined, digits = 2): string {
     if (v == null) return '-';
@@ -195,5 +225,104 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (s < 60) return s + 's ago';
     if (s < 3600) return Math.round(s / 60) + 'm ago';
     return Math.round(s / 3600) + 'h ago';
+  }
+
+  sortOrdersBy(key: OrdersSortKey): void {
+    if (this.ordersSortKey === key) {
+      this.ordersSortDir = this.ordersSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.ordersSortKey = key;
+      this.ordersSortDir = 'desc';
+    }
+    this.applyOrdersSort();
+  }
+
+  sortPositionsBy(key: PositionsSortKey): void {
+    if (this.positionsSortKey === key) {
+      this.positionsSortDir = this.positionsSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.positionsSortKey = key;
+      this.positionsSortDir = 'desc';
+    }
+    this.applyPositionsSort();
+  }
+
+  sortArrow(
+    active: OrdersSortKey | PositionsSortKey,
+    dir: SortDir,
+    key: OrdersSortKey | PositionsSortKey,
+  ): string {
+    if (active !== key) return '';
+    return dir === 'asc' ? ' ▲' : ' ▼';
+  }
+
+  private applyOrdersSort(): void {
+    const key = this.ordersSortKey;
+    const sign = this.ordersSortDir === 'asc' ? 1 : -1;
+    this.orders = [...this.orders].sort(
+      (a, b) => this.compare(this.ordersValue(a, key), this.ordersValue(b, key)) * sign,
+    );
+  }
+
+  private applyPositionsSort(): void {
+    const key = this.positionsSortKey;
+    const sign = this.positionsSortDir === 'asc' ? 1 : -1;
+    this.positions = [...this.positions].sort(
+      (a, b) =>
+        this.compare(this.positionsValue(a, key), this.positionsValue(b, key)) * sign,
+    );
+  }
+
+  private ordersValue(o: OrderRecord, key: OrdersSortKey): string | number {
+    switch (key) {
+      case 'time':
+        return o.completedAt ?? o.createdAt;
+      case 'mode':
+        return o.mode;
+      case 'kind':
+        return o.kind;
+      case 'market':
+        return o.label;
+      case 'side':
+        return o.side;
+      case 'size':
+        return o.filledSize;
+      case 'ref':
+        return o.refPrice;
+      case 'avgFill':
+        return o.avgFillPrice;
+      case 'edge':
+        return o.edgeAtEntry;
+      case 'execEdge':
+        return o.executableEdgeAtEntry;
+      case 'status':
+        return o.status;
+      case 'reason':
+        return o.closeReason ?? '';
+      case 'error':
+        return o.errorMessage ?? '';
+    }
+  }
+
+  private positionsValue(p: Position, key: PositionsSortKey): string | number {
+    switch (key) {
+      case 'market':
+        return p.label;
+      case 'side':
+        return p.side;
+      case 'size':
+        return p.totalSize;
+      case 'avgEntry':
+        return p.avgEntryPrice;
+      case 'costBasis':
+        return p.costBasisUsd;
+      case 'opened':
+        return p.openedAt;
+    }
+  }
+
+  private compare(a: string | number, b: string | number): number {
+    if (typeof a === 'number' && typeof b === 'number') return a - b;
+    return String(a).localeCompare(String(b));
   }
 }

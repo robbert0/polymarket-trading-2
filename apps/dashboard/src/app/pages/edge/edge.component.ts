@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription, retry, timer } from 'rxjs';
 import { EdgeService, EdgeComparison } from '../../services/edge.service';
+import { formatDateTime } from '../../utils/format-time';
 
 type SortKey =
   | 'label'
@@ -135,9 +136,7 @@ export class EdgeComponent implements OnInit, OnDestroy {
     return '$' + price.toFixed(2);
   }
 
-  formatTime(ts: number): string {
-    return new Date(ts).toLocaleTimeString();
-  }
+  readonly formatTime = formatDateTime;
 
   adviceClass(advice: string): string {
     if (advice === 'BUY_YES') return 'text-green-400';

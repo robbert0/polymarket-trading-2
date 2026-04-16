@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subscription, retry, timer } from 'rxjs';
 import { Trade, TradesService } from '../../services/trades.service';
+import { formatDateTime } from '../../utils/format-time';
 
 @Component({
   selector: 'app-trades',
@@ -94,7 +95,8 @@ export class TradesComponent implements OnInit, OnDestroy {
   }
 
   formatTime(ts: number): string {
-    return new Date(ts * 1000).toLocaleTimeString();
+    // Trade timestamps come in seconds from Polymarket — convert to ms.
+    return formatDateTime(ts * 1000);
   }
 
   shortTx(hash: string): string {

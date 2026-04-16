@@ -92,12 +92,30 @@
         class="text-gray-500 uppercase text-[10px] border-b border-gray-800"
       >
         <tr>
-          <th class="text-left py-2 pr-3">Market</th>
-          <th class="text-left pr-3">Side</th>
-          <th class="text-right pr-3">Size</th>
-          <th class="text-right pr-3">Avg Entry</th>
-          <th class="text-right pr-3">Cost Basis</th>
-          <th class="text-left pr-3">Opened</th>
+          <th class="text-left py-2 pr-3 cursor-pointer select-none hover:text-gray-300"
+              (click)="sortPositionsBy('market')">
+            Market{{ sortArrow(positionsSortKey, positionsSortDir, 'market') }}
+          </th>
+          <th class="text-left pr-3 cursor-pointer select-none hover:text-gray-300"
+              (click)="sortPositionsBy('side')">
+            Side{{ sortArrow(positionsSortKey, positionsSortDir, 'side') }}
+          </th>
+          <th class="text-right pr-3 cursor-pointer select-none hover:text-gray-300"
+              (click)="sortPositionsBy('size')">
+            Size{{ sortArrow(positionsSortKey, positionsSortDir, 'size') }}
+          </th>
+          <th class="text-right pr-3 cursor-pointer select-none hover:text-gray-300"
+              (click)="sortPositionsBy('avgEntry')">
+            Avg Entry{{ sortArrow(positionsSortKey, positionsSortDir, 'avgEntry') }}
+          </th>
+          <th class="text-right pr-3 cursor-pointer select-none hover:text-gray-300"
+              (click)="sortPositionsBy('costBasis')">
+            Cost Basis{{ sortArrow(positionsSortKey, positionsSortDir, 'costBasis') }}
+          </th>
+          <th class="text-left pr-3 cursor-pointer select-none hover:text-gray-300"
+              (click)="sortPositionsBy('opened')">
+            Opened{{ sortArrow(positionsSortKey, positionsSortDir, 'opened') }}
+          </th>
           <th class="text-right"></th>
         </tr>
       </thead>
@@ -136,19 +154,58 @@
   <table class="w-full text-xs">
     <thead class="text-gray-500 uppercase text-[10px] border-b border-gray-800">
       <tr>
-        <th class="text-left py-2 pr-3">Time</th>
-        <th class="text-left pr-3">Mode</th>
-        <th class="text-left pr-3">Kind</th>
-        <th class="text-left pr-3">Market</th>
-        <th class="text-left pr-3">Side</th>
-        <th class="text-right pr-3">Size</th>
-        <th class="text-right pr-3">Ref</th>
-        <th class="text-right pr-3">Avg Fill</th>
-        <th class="text-right pr-3">Edge@entry</th>
-        <th class="text-right pr-3">ExecEdge</th>
-        <th class="text-left pr-3">Status</th>
-        <th class="text-left pr-3">Reason</th>
-        <th class="text-left">Error</th>
+        <th class="text-left py-2 pr-3 cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('time')">
+          Time{{ sortArrow(ordersSortKey, ordersSortDir, 'time') }}
+        </th>
+        <th class="text-left pr-3 cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('mode')">
+          Mode{{ sortArrow(ordersSortKey, ordersSortDir, 'mode') }}
+        </th>
+        <th class="text-left pr-3 cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('kind')">
+          Kind{{ sortArrow(ordersSortKey, ordersSortDir, 'kind') }}
+        </th>
+        <th class="text-left pr-3 cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('market')">
+          Market{{ sortArrow(ordersSortKey, ordersSortDir, 'market') }}
+        </th>
+        <th class="text-left pr-3 cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('side')">
+          Side{{ sortArrow(ordersSortKey, ordersSortDir, 'side') }}
+        </th>
+        <th class="text-right pr-3 cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('size')">
+          Size{{ sortArrow(ordersSortKey, ordersSortDir, 'size') }}
+        </th>
+        <th class="text-right pr-3 cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('ref')">
+          Ref{{ sortArrow(ordersSortKey, ordersSortDir, 'ref') }}
+        </th>
+        <th class="text-right pr-3 cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('avgFill')">
+          Avg Fill{{ sortArrow(ordersSortKey, ordersSortDir, 'avgFill') }}
+        </th>
+        <th class="text-right pr-3 cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('edge')">
+          Edge@entry{{ sortArrow(ordersSortKey, ordersSortDir, 'edge') }}
+        </th>
+        <th class="text-right pr-3 cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('execEdge')">
+          ExecEdge{{ sortArrow(ordersSortKey, ordersSortDir, 'execEdge') }}
+        </th>
+        <th class="text-left pr-3 cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('status')">
+          Status{{ sortArrow(ordersSortKey, ordersSortDir, 'status') }}
+        </th>
+        <th class="text-left pr-3 cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('reason')">
+          Reason{{ sortArrow(ordersSortKey, ordersSortDir, 'reason') }}
+        </th>
+        <th class="text-left cursor-pointer select-none hover:text-gray-300"
+            (click)="sortOrdersBy('error')">
+          Error{{ sortArrow(ordersSortKey, ordersSortDir, 'error') }}
+        </th>
       </tr>
     </thead>
     <tbody>
